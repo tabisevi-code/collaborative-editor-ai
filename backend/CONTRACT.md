@@ -19,7 +19,7 @@ Response (201):
   "currentVersionId": "ver_1"
 }
 
-## GET /documents/:id
+## GET /documents/:documentId
 Response (200):
 {
   "documentId": "doc_123",
