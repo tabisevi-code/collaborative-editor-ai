@@ -1,0 +1,16 @@
+{
+  "name": "collaborative-editor-ai-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend PoC (Node/Express) for collaborative-editor-ai",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "test": "node test/smoke.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0"
+  }
+}
