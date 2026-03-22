@@ -1,0 +1,168 @@
+openapi: 3.0.3
+info:
+  title: Collaborative Editor AI - Backend PoC API
+  version: 0.1.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+  /documents:
+    post:
+      summary: Create a new document
+      parameters:
+        - $ref: "#/components/parameters/UserIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+      responses:
+        "201":
+          description: Created
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateDocumentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+  /documents/{documentId}:
+    get:
+      summary: Get a document by ID
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/UserIdHeader"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Request-Id:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetDocumentResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+components:
+  parameters:
+    UserIdHeader:
+      name: x-user-id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: PoC user identity. Defaults to user_poc if omitted.
+  headers:
+    XRequestId:
+      description: Request correlation id
+      schema:
+        type: string
+  schemas:
+    CreateDocumentRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          example: Untitled
+        content:
+          type: string
+          example: Initial text
+    CreateDocumentResponse:
+      type: object
+      required: [documentId, title, ownerId, createdAt, updatedAt, currentVersionId]
+      properties:
+        documentId:
+          type: string
+          example: doc_123
+        title:
+          type: string
+        ownerId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        currentVersionId:
+          type: string
+          example: ver_1
+    GetDocumentResponse:
+      type: object
+      required: [documentId, title, content, updatedAt, currentVersionId, role, revisionId]
+      properties:
+        documentId:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        currentVersionId:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        revisionId:
+          type: string
+          example: rev_1
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PayloadTooLarge:
+      description: Payload too large
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

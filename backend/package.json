@@ -1,0 +1,24 @@
+{
+  "name": "collaborative-editor-ai-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend PoC (Node/Express) for collaborative-editor-ai",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "npm run test:contract && npm run test:smoke",
+    "test:contract": "node --test test/contract.test.js",
+    "test:smoke": "node test/smoke.js",
+    "smoke": "npm run test:smoke"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "express": "5.1.0",
+    "zod": "4.3.6"
+  }
+}
