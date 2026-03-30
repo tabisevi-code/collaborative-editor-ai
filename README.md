@@ -31,7 +31,6 @@ The system consists of:
 - Identity Provider (OAuth / OIDC compatible)
 
 ---
-
 ## Development Status
 
 Backend PoC implemented:
@@ -40,8 +39,6 @@ Backend PoC implemented:
 - Standardized error responses
 - Contract tests
 - Smoke tests
-
-Frontend and realtime service to be implemented by team.
 
 ---
 
