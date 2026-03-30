@@ -1,0 +1,24 @@
+ADR-001: Real-time collaboration consistency approach (CRDT vs OT)
+- Status: Proposed (confirm in meeting)
+- Context:
+  - The system requires concurrent editing, offline/reconnect support, and guaranteed convergence (no lost edits).
+  - The solution must be robust to out-of-order delivery and network disruptions while remaining feasible for a student project.
+- Decision:
+  - Adopt a CRDT-based collaboration approach using a well-tested library (e.g., Yjs) for convergence at the data-structure level.
+  - The realtime service acts as a relay and permission gate (reject unauthorized edit ops), while the backend persists periodic snapshots/versions.
+- Rationale:
+  - CRDTs provide strong eventual consistency and are well-suited for offline-first and reconnect flows.
+  - A library-backed CRDT reduces correctness risk compared to implementing OT/CRDT from scratch.
+- Consequences:
+  - Pros:
+    - Simplifies conflict resolution and convergence guarantees.
+    - Better offline and reconnect experience.
+  - Cons:
+    - Additional metadata overhead; requires careful persistence strategy (snapshotting).
+    - Must clearly define how versions relate to CRDT state.
+- Alternatives considered:
+  - OT with server-authoritative transforms: mature pattern but higher implementation complexity and correctness risk.
+  - Last-write-wins / naive merge: unacceptable due to lost edits and poor user experience.
+- Open questions (highlight for meeting):
+  - Final choice confirmation: CRDT vs OT (recommend CRDT).
+  - Where to persist: store full snapshot vs store operation log vs hybrid.
