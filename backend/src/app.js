@@ -7,11 +7,28 @@ const { notFoundHandler, errorHandler } = require("./lib/errors");
 
 const { healthRoutes } = require("./routes/healthRoutes");
 const { documentsRoutes } = require("./routes/documentsRoutes");
+const { aiRoutes } = require("./routes/aiRoutes");
+const { logInfo, logError } = require("./lib/logger");
+const { createAiService, createLmStudioProvider } = require("../../ai-service/src");
 
-function createApp(config) {
+function createApp(config, dependencies = {}) {
   if (!config || typeof config !== "object") {
     throw new Error("createApp requires a config object");
   }
+
+  const aiService =
+    dependencies.aiService ||
+    createAiService({
+      provider: createLmStudioProvider({
+        endpoint: config.aiProviderEndpoint,
+        model: config.aiModel,
+        timeoutMs: config.aiTimeoutMs,
+      }),
+      logger: {
+        info: logInfo,
+        error: logError,
+      },
+    });
 
   const app = express();
   app.disable("x-powered-by");
@@ -27,6 +44,11 @@ function createApp(config) {
   app.use(
     documentsRoutes({
       contentMaxBytes: config.documentContentMaxBytes,
+    })
+  );
+  app.use(
+    aiRoutes({
+      aiService,
     })
   );
 

@@ -87,7 +87,9 @@ test.before(async () => {
   const app = createApp(config);
 
   await new Promise((resolve, reject) => {
-    server = app.listen(0, "127.0.0.1", () => {
+    server = app.listen(0, "127.0.0.1");
+
+    server.once("listening", () => {
       const address = server.address();
       if (!address || typeof address !== "object") {
         reject(new Error("failed to resolve test server address"));
@@ -98,12 +100,14 @@ test.before(async () => {
       resolve();
     });
 
-    server.on("error", reject);
+    server.once("error", reject);
   });
 });
 
 test.after(async () => {
-  await closeServer(server);
+  if (server?.listening) {
+    await closeServer(server);
+  }
 });
 
 test.beforeEach(() => {
