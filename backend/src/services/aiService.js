@@ -115,12 +115,13 @@ function createAiService({ repository, provider }) {
       baseVersionId: payload.baseVersionId,
     });
 
-    logInfo("ai_job_created", {
-      jobId: job.jobId,
-      actionType,
-      documentId: payload.documentId,
-      baseVersionId: payload.baseVersionId,
-    });
+      logInfo("ai_job_created", {
+        jobId: job.jobId,
+        actionType,
+        documentId: payload.documentId,
+        baseVersionId: payload.baseVersionId,
+        requestId: payload.requestId,
+      });
 
     queueJobExecution(job.jobId);
     return toAiJobResponse(job);

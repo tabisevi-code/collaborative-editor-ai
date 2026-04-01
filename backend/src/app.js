@@ -18,7 +18,19 @@ const { documentsRoutes } = require("./routes/documentsRoutes");
 const { aiRoutes } = require("./routes/aiRoutes");
 const { exportRoutes } = require("./routes/exportRoutes");
 const { sessionsRoutes } = require("./routes/sessionsRoutes");
-const { createLmStudioProvider } = require("../../ai-service/src");
+const { createLmStudioProvider, createStubProvider } = require("../../ai-service/src");
+
+function createConfiguredAiProvider(config) {
+  if (config.aiProvider === "lmstudio") {
+    return createLmStudioProvider({
+      endpoint: config.aiProviderEndpoint,
+      model: config.aiModel,
+      timeoutMs: config.aiTimeoutMs,
+    });
+  }
+
+  return createStubProvider();
+}
 
 function createApp(config, dependencies = {}) {
   if (!config || typeof config !== "object") {
@@ -35,13 +47,7 @@ function createApp(config, dependencies = {}) {
     repository,
     contentMaxBytes: config.documentContentMaxBytes,
   });
-  const aiProvider =
-    dependencies.aiProvider ||
-    createLmStudioProvider({
-      endpoint: config.aiProviderEndpoint,
-      model: config.aiModel,
-      timeoutMs: config.aiTimeoutMs,
-    });
+  const aiProvider = dependencies.aiProvider || createConfiguredAiProvider(config);
   const aiService =
     dependencies.aiService ||
     createAiService({

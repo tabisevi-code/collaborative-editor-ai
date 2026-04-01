@@ -15,6 +15,7 @@ test("loadEnvFile loads keys from a .env file without overriding existing env va
     [
       "# backend config",
       "PORT=4100",
+      "AI_PROVIDER=lmstudio",
       "AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions",
       'AI_MODEL="lm-studio-model"',
       "AI_TIMEOUT_MS=20000",
@@ -31,11 +32,13 @@ test("loadEnvFile loads keys from a .env file without overriding existing env va
 
   assert.equal(result.loaded, true);
   assert.deepEqual(result.loadedKeys, [
+    "AI_PROVIDER",
     "AI_PROVIDER_ENDPOINT",
     "AI_MODEL",
     "AI_TIMEOUT_MS",
   ]);
   assert.equal(env.PORT, "9999");
+  assert.equal(env.AI_PROVIDER, "lmstudio");
   assert.equal(env.AI_PROVIDER_ENDPOINT, "http://127.0.0.1:1234/v1/chat/completions");
   assert.equal(env.AI_MODEL, "lm-studio-model");
   assert.equal(env.AI_TIMEOUT_MS, "20000");
