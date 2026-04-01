@@ -2,6 +2,14 @@
 
 This backend is the main REST API for the Collaborative Editor AI project.
 
+For repo-wide install, dev, and test commands, start from the root README:
+
+```bash
+npm run install:all
+npm run dev:all
+npm run test:all
+```
+
 It now includes:
 
 - SQLite persistence
@@ -36,9 +44,12 @@ Important defaults:
 - `DATABASE_PATH=./data/collaborative-editor-ai.sqlite`
 - `REALTIME_WS_BASE_URL=ws://localhost:3001/ws`
 - `ALLOW_DEBUG_USER_HEADER=true`
+- `AI_PROVIDER=stub`
 - `AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions`
 - `AI_MODEL=local-model`
 - `AI_TIMEOUT_MS=15000`
+
+`AI_PROVIDER=stub` is the safest local/demo default. Set `AI_PROVIDER=lmstudio` if you want the backend to call a live OpenAI-compatible endpoint.
 
 ## Run
 
