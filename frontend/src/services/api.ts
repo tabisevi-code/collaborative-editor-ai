@@ -187,38 +187,62 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
     },
 
     async requestRewriteJob(payload, userId) {
-      const response = await request<{ jobId: string; statusUrl: string }>(
+      const response = await request<{
+        jobId: string;
+        status?: AiJobResponse["status"];
+        statusUrl?: string;
+        baseVersionId?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      }>(
         "/ai/rewrite",
         { method: "POST", body: JSON.stringify(payload) },
         userId
       );
       return {
         ...response,
-        status: "PENDING",
+        statusUrl: response.statusUrl || `/ai/jobs/${response.jobId}`,
+        status: response.status || "PENDING",
       };
     },
 
     async requestSummarizeJob(payload, userId) {
-      const response = await request<{ jobId: string; statusUrl: string }>(
+      const response = await request<{
+        jobId: string;
+        status?: AiJobResponse["status"];
+        statusUrl?: string;
+        baseVersionId?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      }>(
         "/ai/summarize",
         { method: "POST", body: JSON.stringify(payload) },
         userId
       );
       return {
         ...response,
-        status: "PENDING",
+        statusUrl: response.statusUrl || `/ai/jobs/${response.jobId}`,
+        status: response.status || "PENDING",
       };
     },
 
     async requestTranslateJob(payload, userId) {
-      const response = await request<{ jobId: string; statusUrl: string }>(
+      const response = await request<{
+        jobId: string;
+        status?: AiJobResponse["status"];
+        statusUrl?: string;
+        baseVersionId?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      }>(
         "/ai/translate",
         { method: "POST", body: JSON.stringify(payload) },
         userId
       );
       return {
         ...response,
-        status: "PENDING",
+        statusUrl: response.statusUrl || `/ai/jobs/${response.jobId}`,
+        status: response.status || "PENDING",
       };
     },
 
@@ -226,7 +250,7 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
       const payload = await request<{
         jobId: string;
         status: AiJobResponse["status"];
-        result?: { proposedText?: string };
+        proposedText?: string;
         errorCode?: string;
         errorMessage?: string;
         baseVersionId?: string;
@@ -238,7 +262,8 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
         jobId: payload.jobId,
         statusUrl: `/ai/jobs/${payload.jobId}`,
         status: payload.status,
-        output: payload.result?.proposedText,
+        output: payload.proposedText,
+        proposedText: payload.proposedText,
         errorCode: payload.errorCode,
         errorMessage: payload.errorMessage,
         baseVersionId: payload.baseVersionId,

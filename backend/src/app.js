@@ -18,8 +18,9 @@ const { documentsRoutes } = require("./routes/documentsRoutes");
 const { aiRoutes } = require("./routes/aiRoutes");
 const { exportRoutes } = require("./routes/exportRoutes");
 const { sessionsRoutes } = require("./routes/sessionsRoutes");
+const { createLmStudioProvider } = require("../../ai-service/src");
 
-function createApp(config) {
+function createApp(config, dependencies = {}) {
   if (!config || typeof config !== "object") {
     throw new Error("createApp requires a config object");
   }
@@ -34,7 +35,19 @@ function createApp(config) {
     repository,
     contentMaxBytes: config.documentContentMaxBytes,
   });
-  const aiService = createAiService({ repository });
+  const aiProvider =
+    dependencies.aiProvider ||
+    createLmStudioProvider({
+      endpoint: config.aiProviderEndpoint,
+      model: config.aiModel,
+      timeoutMs: config.aiTimeoutMs,
+    });
+  const aiService =
+    dependencies.aiService ||
+    createAiService({
+      repository,
+      provider: aiProvider,
+    });
   const exportService = createExportService({ repository });
   const sessionsService = createSessionsService({
     repository,

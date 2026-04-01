@@ -1,13 +1,32 @@
-import type { AiJobResponse, TextSelection } from "../types/api";
+import type {
+  AiJobResponse,
+  TextSelection,
+} from "../types/api";
 import type { ApiClient } from "./api";
 
 export type AiJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
 export interface AiService {
-  requestRewrite(documentId: string, selection: TextSelection, instruction?: string): Promise<AiJobResponse>;
-  requestSummarize(documentId: string, selection: TextSelection): Promise<AiJobResponse>;
-  requestTranslate(documentId: string, selection: TextSelection, targetLanguage: string): Promise<AiJobResponse>;
+  requestRewrite(
+    documentId: string,
+    snapshot: AiSelectionSnapshot,
+    instruction?: string
+  ): Promise<AiJobResponse>;
+  requestSummarize(documentId: string, snapshot: AiSelectionSnapshot): Promise<AiJobResponse>;
+  requestTranslate(
+    documentId: string,
+    snapshot: AiSelectionSnapshot,
+    targetLanguage: string
+  ): Promise<AiJobResponse>;
   pollJobUntilDone(jobId: string, userId?: string): Promise<AiJobResponse>;
+}
+
+export interface AiSelectionSnapshot {
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore: string;
+  contextAfter: string;
+  baseVersionId: string;
 }
 
 const POLL_INTERVAL_MS = 1500;
@@ -38,30 +57,30 @@ export function createAiService(apiClient: ApiClient, userId?: string): AiServic
   }
 
   return {
-    requestRewrite: (documentId, selection, instruction = "Rewrite this selection") =>
+    requestRewrite: (documentId, snapshot, instruction = "Rewrite this selection") =>
       apiClient.requestRewriteJob(
         {
           documentId,
-          selection,
+          ...snapshot,
           instruction,
           requestId: makeRequestId("ai_rewrite"),
         },
         userId
       ),
-    requestSummarize: (documentId, selection) =>
+    requestSummarize: (documentId, snapshot) =>
       apiClient.requestSummarizeJob(
         {
           documentId,
-          selection,
+          ...snapshot,
           requestId: makeRequestId("ai_summarize"),
         },
         userId
       ),
-    requestTranslate: (documentId, selection, targetLanguage) =>
+    requestTranslate: (documentId, snapshot, targetLanguage) =>
       apiClient.requestTranslateJob(
         {
           documentId,
-          selection,
+          ...snapshot,
           targetLanguage,
           requestId: makeRequestId("ai_translate"),
         },

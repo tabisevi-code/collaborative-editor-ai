@@ -8,6 +8,9 @@ const DEFAULT_REALTIME_WS_BASE_URL = "ws://localhost:3001/ws";
 const DEFAULT_AUTH_TOKEN_TTL_SECONDS = 86400;
 const DEFAULT_SESSION_TOKEN_TTL_SECONDS = 3600;
 const DEFAULT_ALLOW_DEBUG_USER_HEADER = true;
+const DEFAULT_AI_PROVIDER_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions";
+const DEFAULT_AI_MODEL = "local-model";
+const DEFAULT_AI_TIMEOUT_MS = 15000;
 
 function parsePositiveInt(rawValue, envName, fallbackValue) {
   if (rawValue === undefined || rawValue === null || rawValue === "") {
@@ -73,6 +76,9 @@ function loadConfig(env = process.env) {
     ),
     allowDebugUserHeader: parseBoolean(env.ALLOW_DEBUG_USER_HEADER, DEFAULT_ALLOW_DEBUG_USER_HEADER),
     realtimeSharedSecret: parseNonEmptyString(env.REALTIME_SHARED_SECRET, "collaborative-editor-ai-dev-secret"),
+    aiProviderEndpoint: parseNonEmptyString(env.AI_PROVIDER_ENDPOINT, DEFAULT_AI_PROVIDER_ENDPOINT),
+    aiModel: parseNonEmptyString(env.AI_MODEL, DEFAULT_AI_MODEL),
+    aiTimeoutMs: parsePositiveInt(env.AI_TIMEOUT_MS, "AI_TIMEOUT_MS", DEFAULT_AI_TIMEOUT_MS),
   });
 }
 

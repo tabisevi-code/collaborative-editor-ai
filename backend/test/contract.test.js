@@ -78,7 +78,21 @@ test.before(async () => {
     ALLOW_DEBUG_USER_HEADER: "true",
   });
 
-  app = createApp(config);
+  app = createApp(config, {
+    aiProvider: {
+      async generateText(input) {
+        if (input.action === "summarize") {
+          return { proposedText: "Short summary" };
+        }
+
+        if (input.action === "translate") {
+          return { proposedText: "Bonjour le monde" };
+        }
+
+        return { proposedText: `${input.instruction || "Rewrite"}: ${input.selectedText}` };
+      },
+    },
+  });
 });
 
 test.after(async () => {
@@ -337,6 +351,10 @@ test("AI policy can disable AI and AI jobs complete asynchronously", async () =>
     body: {
       documentId,
       selection: { start: 0, end: 5 },
+      selectedText: "Hello",
+      contextBefore: "",
+      contextAfter: " from AI testing",
+      baseVersionId: createResult.json.currentVersionId,
       instruction: "Rewrite",
       requestId: "req_ai_disabled",
     },
@@ -361,6 +379,10 @@ test("AI policy can disable AI and AI jobs complete asynchronously", async () =>
     body: {
       documentId,
       selection: { start: 0, end: 5 },
+      selectedText: "Hello",
+      contextBefore: "",
+      contextAfter: " from AI testing",
+      baseVersionId: createResult.json.currentVersionId,
       instruction: "Rewrite",
       requestId: "req_ai_success",
     },
@@ -376,7 +398,7 @@ test("AI policy can disable AI and AI jobs complete asynchronously", async () =>
 
   assert.equal(aiStatus.status, 200);
   assert.equal(aiStatus.json.status, "SUCCEEDED");
-  assert.match(aiStatus.json.result.proposedText, /Rewrite/);
+  assert.match(aiStatus.json.proposedText, /Rewrite/);
 });
 
 test("txt export returns download metadata and sessions issue ws URLs", async () => {

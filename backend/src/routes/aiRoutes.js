@@ -11,20 +11,32 @@ const SelectionSchema = z.object({
 const RewriteSchema = z.object({
   documentId: z.string().trim().min(1),
   selection: SelectionSchema,
+  selectedText: z.string().min(1),
+  contextBefore: z.string().optional(),
+  contextAfter: z.string().optional(),
   instruction: z.string().trim().min(1).max(200),
+  baseVersionId: z.string().trim().min(1).max(128),
   requestId: z.string().trim().min(1).max(128),
 });
 
 const SummarizeSchema = z.object({
   documentId: z.string().trim().min(1),
   selection: SelectionSchema,
+  selectedText: z.string().min(1),
+  contextBefore: z.string().optional(),
+  contextAfter: z.string().optional(),
+  baseVersionId: z.string().trim().min(1).max(128),
   requestId: z.string().trim().min(1).max(128),
 });
 
 const TranslateSchema = z.object({
   documentId: z.string().trim().min(1),
   selection: SelectionSchema,
+  selectedText: z.string().min(1),
+  contextBefore: z.string().optional(),
+  contextAfter: z.string().optional(),
   targetLanguage: z.string().trim().min(1).max(64),
+  baseVersionId: z.string().trim().min(1).max(128),
   requestId: z.string().trim().min(1).max(128),
 });
 

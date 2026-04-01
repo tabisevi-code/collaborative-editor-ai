@@ -50,7 +50,7 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient, "user_2");
 
     await waitFor(() => {
-      expect(screen.getByText(/view-only mode/i)).toBeInTheDocument();
+      expect(screen.getByText(/viewer access/i)).toBeInTheDocument();
     });
 
     expect(screen.getByLabelText("Document content")).toHaveAttribute("readonly");

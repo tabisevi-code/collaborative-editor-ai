@@ -1,11 +1,11 @@
 import { useState } from "react";
-import type { AiAction, AiJobResponse, TextSelection } from "../types/api";
-import type { AiService } from "../services/ai";
+import type { AiAction, AiJobResponse } from "../types/api";
+import type { AiSelectionSnapshot, AiService } from "../services/ai";
 import { ApiError } from "../types/api";
 
 interface AiPanelProps {
   documentId: string;
-  selection: TextSelection;
+  snapshot: AiSelectionSnapshot;
   selectedText: string;
   aiService: AiService;
   onApply(text: string): void;
@@ -31,7 +31,7 @@ function mapAiError(error: unknown): string {
   return "Unexpected error. Please try again.";
 }
 
-export function AiPanel({ documentId, selection, selectedText, aiService, onApply, onClose }: AiPanelProps) {
+export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
   const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error">("idle");
@@ -49,11 +49,11 @@ export function AiPanel({ documentId, selection, selectedText, aiService, onAppl
       let job: AiJobResponse;
 
       if (action === "rewrite") {
-        job = await aiService.requestRewrite(documentId, selection);
+        job = await aiService.requestRewrite(documentId, snapshot);
       } else if (action === "summarize") {
-        job = await aiService.requestSummarize(documentId, selection);
+        job = await aiService.requestSummarize(documentId, snapshot);
       } else {
-        job = await aiService.requestTranslate(documentId, selection, targetLanguage);
+        job = await aiService.requestTranslate(documentId, snapshot, targetLanguage);
       }
 
       if (job.status === "SUCCEEDED") {
@@ -76,8 +76,8 @@ export function AiPanel({ documentId, selection, selectedText, aiService, onAppl
   }
 
   function handleApply() {
-    if (result?.output) {
-      onApply(result.output);
+    if (result?.output || result?.proposedText) {
+      onApply(result.output || result.proposedText || "");
       onClose();
     }
   }
@@ -153,10 +153,10 @@ export function AiPanel({ documentId, selection, selectedText, aiService, onAppl
           )}
 
           {/* Result */}
-          {phase === "result" && result?.output && (
+          {phase === "result" && (result?.output || result?.proposedText) && (
             <div className="field">
               <p className="field-label">AI suggestion</p>
-              <div className="ai-result-box">{result.output}</div>
+              <div className="ai-result-box">{result.output || result.proposedText}</div>
               <p className="field-hint">Review the suggestion before applying. This will replace your selected text.</p>
             </div>
           )}

@@ -11,8 +11,9 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "test": "npm run test:contract && npm run test:smoke",
-    "test:contract": "node --test --test-concurrency=1 test/*.test.js",
+    "test": "npm run test:unit && npm run test:smoke",
+    "test:unit": "node --test test/*.test.js",
+    "test:contract": "node --test test/contract.test.js",
     "test:smoke": "node test/smoke.js",
     "smoke": "npm run test:smoke"
   },

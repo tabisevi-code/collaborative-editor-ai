@@ -48,9 +48,10 @@ describe("HomePage", () => {
 
     renderHomePage(apiClient);
 
-    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "My Doc" } });
-    fireEvent.change(screen.getByLabelText("Initial content"), { target: { value: "Hello" } });
-    fireEvent.click(screen.getByRole("button", { name: /Create Document/i }));
+    fireEvent.click(screen.getByText("Blank"));
+    fireEvent.change(await screen.findByLabelText("Title"), { target: { value: "My Doc" } });
+    fireEvent.change(screen.getByLabelText(/Initial content/i), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Create$/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Document Route")).toBeInTheDocument();
@@ -63,7 +64,7 @@ describe("HomePage", () => {
     renderHomePage(apiClient);
 
     fireEvent.change(screen.getByLabelText("Document ID"), { target: { value: "doc_123" } });
-    fireEvent.click(screen.getByRole("button", { name: /Open/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Document Route")).toBeInTheDocument();

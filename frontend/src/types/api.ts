@@ -69,20 +69,32 @@ export interface TextSelection {
 export interface RewriteAiJobRequest {
   documentId: string;
   selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
   instruction: string;
+  baseVersionId: string;
   requestId: string;
 }
 
 export interface SummarizeAiJobRequest {
   documentId: string;
   selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  baseVersionId: string;
   requestId: string;
 }
 
 export interface TranslateAiJobRequest {
   documentId: string;
   selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
   targetLanguage: string;
+  baseVersionId: string;
   requestId: string;
 }
 
@@ -91,6 +103,7 @@ export interface AiJobResponse {
   statusUrl: string;
   status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
   output?: string;
+  proposedText?: string;
   errorMessage?: string;
   errorCode?: string;
   baseVersionId?: string;

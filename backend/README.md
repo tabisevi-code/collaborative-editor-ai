@@ -36,6 +36,9 @@ Important defaults:
 - `DATABASE_PATH=./data/collaborative-editor-ai.sqlite`
 - `REALTIME_WS_BASE_URL=ws://localhost:3001/ws`
 - `ALLOW_DEBUG_USER_HEADER=true`
+- `AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions`
+- `AI_MODEL=local-model`
+- `AI_TIMEOUT_MS=15000`
 
 ## Run
 
@@ -110,6 +113,24 @@ curl -X POST http://localhost:3000/sessions \
   -d '{"documentId":"<DOCUMENT_ID>"}'
 ```
 
+Queue an AI rewrite job from a client-side selection snapshot:
+
+```bash
+curl -X POST http://localhost:3000/ai/rewrite \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documentId":"<DOCUMENT_ID>",
+    "selection":{"start":0,"end":5},
+    "selectedText":"Hello",
+    "contextBefore":"",
+    "contextAfter":" world",
+    "instruction":"Make it more formal",
+    "baseVersionId":"<CURRENT_VERSION_ID>",
+    "requestId":"req_ai_1"
+  }'
+```
+
 ## Tests
 
 Run everything:
@@ -148,4 +169,5 @@ All non-2xx responses follow:
 
 - SQLite is the implementation database for this course project.
 - The `realtime` service reads the same SQLite database for session validation and permission enforcement.
-- AI endpoints are implemented with backend contracts and a stub execution path so Claude can replace the provider logic later without changing the API shape.
+- AI jobs persist in SQLite, while the provider adapter currently targets LM Studio's OpenAI-compatible chat completions API.
+- AI requests accept a selection snapshot plus minimal surrounding context so frontend draft text can be transformed without mutating the stored document directly.
