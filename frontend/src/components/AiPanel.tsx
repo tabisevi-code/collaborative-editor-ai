@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { AiAction, AiJobResponse } from "../types/api";
-import type { AiSelectionSnapshot, AiService } from "../services/ai";
+import type { AiJobStatus, AiSelectionSnapshot, AiService } from "../services/ai";
 import { ApiError } from "../types/api";
 
 interface AiPanelProps {
@@ -31,12 +31,22 @@ function mapAiError(error: unknown): string {
   return "Unexpected error. Please try again.";
 }
 
+function formatJobStatus(status: AiJobStatus | null): string {
+  if (status === "PENDING") return "Queued for processing";
+  if (status === "RUNNING") return "Generating suggestion";
+  if (status === "SUCCEEDED") return "Suggestion ready";
+  if (status === "FAILED") return "Generation failed";
+  return "Ready to run";
+}
+
 export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
   const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error">("idle");
   const [result, setResult] = useState<AiJobResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<AiJobStatus | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
 
   async function handleRun() {
     if (!selectedText.trim()) return;
@@ -44,6 +54,8 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
     setPhase("loading");
     setErrorMessage(null);
     setResult(null);
+    setJobStatus(null);
+    setJobId(null);
 
     try {
       let job: AiJobResponse;
@@ -56,20 +68,30 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
         job = await aiService.requestTranslate(documentId, snapshot, targetLanguage);
       }
 
+      setJobId(job.jobId);
+      setJobStatus(job.status);
+
       if (job.status === "SUCCEEDED") {
         setResult(job);
+        setJobStatus("SUCCEEDED");
         setPhase("result");
         return;
       }
 
-      const polled = await aiService.pollJobUntilDone(job.jobId);
+      const polled = await aiService.pollJobUntilDone(job.jobId, {
+        onStatusChange(nextJob) {
+          setJobStatus(nextJob.status);
+        },
+      });
       setResult(polled);
+      setJobStatus(polled.status);
       setPhase(polled.status === "SUCCEEDED" ? "result" : "error");
 
       if (polled.status === "FAILED") {
         setErrorMessage(polled.errorMessage || "AI job failed.");
       }
     } catch (error) {
+      setJobStatus("FAILED");
       setErrorMessage(mapAiError(error));
       setPhase("error");
     }
@@ -83,6 +105,7 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
   }
 
   const canRun = selectedText.trim().length > 0 && phase !== "loading";
+  const resultText = result?.output || result?.proposedText || "";
 
   return (
     <>
@@ -144,20 +167,39 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
             )}
           </div>
 
+          <div className="field ai-job-status-card">
+            <p className="field-label">Job status</p>
+            <div className="ai-job-status-row">
+              <strong>{formatJobStatus(jobStatus)}</strong>
+              {jobId && <span className="field-hint">{jobId}</span>}
+            </div>
+            {phase === "loading" && (
+              <p className="field-hint">
+                The backend is running an async job and polling for the final suggestion.
+              </p>
+            )}
+          </div>
+
           {/* Loading state */}
           {phase === "loading" && (
             <div className="ai-spinner">
               <div className="spinner-ring" />
-              <span>Running AI job…</span>
+              <span>{formatJobStatus(jobStatus)}</span>
             </div>
           )}
 
           {/* Result */}
-          {phase === "result" && (result?.output || result?.proposedText) && (
-            <div className="field">
-              <p className="field-label">AI suggestion</p>
-              <div className="ai-result-box">{result.output || result.proposedText}</div>
-              <p className="field-hint">Review the suggestion before applying. This will replace your selected text.</p>
+          {phase === "result" && resultText && (
+            <div className="field ai-review-grid">
+              <div>
+                <p className="field-label">Before</p>
+                <div className="ai-selection-preview">{selectedText}</div>
+              </div>
+              <div>
+                <p className="field-label">After</p>
+                <div className="ai-result-box">{resultText}</div>
+              </div>
+              <p className="field-hint">Review the suggestion before applying. This replaces only the selected text.</p>
             </div>
           )}
 

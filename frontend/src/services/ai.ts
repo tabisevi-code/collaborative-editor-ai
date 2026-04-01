@@ -6,6 +6,11 @@ import type { ApiClient } from "./api";
 
 export type AiJobStatus = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
+export interface PollJobOptions {
+  userId?: string;
+  onStatusChange?(job: AiJobResponse): void;
+}
+
 export interface AiService {
   requestRewrite(
     documentId: string,
@@ -18,7 +23,7 @@ export interface AiService {
     snapshot: AiSelectionSnapshot,
     targetLanguage: string
   ): Promise<AiJobResponse>;
-  pollJobUntilDone(jobId: string, userId?: string): Promise<AiJobResponse>;
+  pollJobUntilDone(jobId: string, options?: PollJobOptions): Promise<AiJobResponse>;
 }
 
 export interface AiSelectionSnapshot {
@@ -37,9 +42,10 @@ export function createAiService(apiClient: ApiClient, userId?: string): AiServic
     return `req_${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
   }
 
-  async function pollJobUntilDone(jobId: string, pollUserId?: string): Promise<AiJobResponse> {
+  async function pollJobUntilDone(jobId: string, options: PollJobOptions = {}): Promise<AiJobResponse> {
     for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
-      const job = await apiClient.getAiJobStatus(jobId, pollUserId ?? userId);
+      const job = await apiClient.getAiJobStatus(jobId, options.userId ?? userId);
+      options.onStatusChange?.(job);
 
       if (job.status === "SUCCEEDED" || job.status === "FAILED") {
         return job;
