@@ -68,6 +68,96 @@ paths:
                 $ref: "#/components/schemas/GetDocumentResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+  /ai/rewrite:
+    post:
+      summary: Create an async AI rewrite job
+      parameters:
+        - $ref: "#/components/parameters/UserIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiRewriteRequest"
+      responses:
+        "202":
+          description: Accepted
+          headers:
+            XRequestId:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /ai/summarize:
+    post:
+      summary: Create an async AI summarize job
+      parameters:
+        - $ref: "#/components/parameters/UserIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiSummarizeRequest"
+      responses:
+        "202":
+          description: Accepted
+          headers:
+            XRequestId:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /ai/translate:
+    post:
+      summary: Create an async AI translate job
+      parameters:
+        - $ref: "#/components/parameters/UserIdHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiTranslateRequest"
+      responses:
+        "202":
+          description: Accepted
+          headers:
+            XRequestId:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /ai/jobs/{jobId}:
+    get:
+      summary: Get AI job status
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            XRequestId:
+              $ref: "#/components/headers/XRequestId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiJobResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   parameters:
     UserIdHeader:
@@ -134,6 +224,72 @@ components:
         revisionId:
           type: string
           example: rev_1
+    Selection:
+      type: object
+      required: [start, end]
+      properties:
+        start:
+          type: integer
+          minimum: 0
+        end:
+          type: integer
+          minimum: 1
+    AiRequestBase:
+      type: object
+      required: [documentId, selection, selectedText, baseVersionId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: "#/components/schemas/Selection"
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        instruction:
+          type: string
+        baseVersionId:
+          type: string
+    AiRewriteRequest:
+      allOf:
+        - $ref: "#/components/schemas/AiRequestBase"
+    AiSummarizeRequest:
+      allOf:
+        - $ref: "#/components/schemas/AiRequestBase"
+    AiTranslateRequest:
+      allOf:
+        - $ref: "#/components/schemas/AiRequestBase"
+        - type: object
+          required: [targetLanguage]
+          properties:
+            targetLanguage:
+              type: string
+    AiJobResponse:
+      type: object
+      required: [jobId, status, baseVersionId, createdAt, updatedAt]
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCEEDED, FAILED]
+        proposedText:
+          type: string
+        baseVersionId:
+          type: string
+        errorCode:
+          type: string
+          enum: [AI_FAILED, AI_TIMEOUT, QUOTA_EXCEEDED, AI_ROLE_FORBIDDEN, AI_DISABLED]
+        errorMessage:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     ErrorResponse:
       type: object
       properties:

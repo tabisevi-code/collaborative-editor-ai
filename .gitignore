@@ -11,6 +11,13 @@ coverage/
 # Env
 .env
 .env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+ai-service/.env
+ai-service/.env.*
+.envrc
 
 # OS / Editor
 .DS_Store

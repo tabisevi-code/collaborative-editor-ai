@@ -104,11 +104,29 @@ See `.env.example` for available variables and defaults.
 - `PORT` (default: `3000`)
 - `JSON_BODY_LIMIT` (default: `1mb`)
 - `DOCUMENT_CONTENT_MAX_BYTES` (default: `204800`)
+- `AI_PROVIDER_ENDPOINT` (default: `http://127.0.0.1:1234/v1/chat/completions`)
+- `AI_MODEL` (default: `local-model`)
+- `AI_TIMEOUT_MS` (default: `15000`)
 
 Example:
 
 ```bash
-PORT=4000 npm run dev
+cp .env.example .env
+npm run dev
+```
+
+The backend loads `backend/.env` automatically at startup. Values already set
+in the shell still override `.env`, so ad-hoc local testing remains easy.
+
+Example `.env` for LM Studio:
+
+```bash
+PORT=3000
+JSON_BODY_LIMIT=1mb
+DOCUMENT_CONTENT_MAX_BYTES=204800
+AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions
+AI_MODEL=local-model
+AI_TIMEOUT_MS=15000
 ```
 
 ## Error schema
