@@ -71,6 +71,20 @@ function saveRange(): Range | null {
   return sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
 }
 
+function isNodeInsideEditor(editor: HTMLDivElement, node: Node | null): boolean {
+  if (!node) return false;
+  return editor.contains(node.nodeType === Node.TEXT_NODE ? node.parentNode : node);
+}
+
+function getEditorRange(editor: HTMLDivElement): Range | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  if (!isNodeInsideEditor(editor, selection.anchorNode) || !isNodeInsideEditor(editor, selection.focusNode)) {
+    return null;
+  }
+  return selection.getRangeAt(0).cloneRange();
+}
+
 function restoreRange(range: Range | null) {
   if (!range) return;
   const sel = window.getSelection();
@@ -85,6 +99,12 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     const initialized = useRef(false);
     const savedRange  = useRef<Range | null>(null);
 
+    function rememberSelection() {
+      if (!divRef.current) return;
+      const range = getEditorRange(divRef.current);
+      if (range) savedRange.current = range;
+    }
+
     // Set initial content only once when document loads
     useEffect(() => {
       if (!divRef.current || initialized.current) return;
@@ -98,6 +118,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         if (!divRef.current) return;
         const sel = window.getSelection();
         if (!sel || !divRef.current.contains(sel.focusNode)) return;
+        rememberSelection();
         onSelectionChange(queryState());
       }
       document.addEventListener("selectionchange", handleSelectionChange);
@@ -107,16 +128,17 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     // ── Imperative API ────────────────────────────────────────────────────
     useImperativeHandle(ref, () => ({
       format(command, value) {
-        const range = saveRange();
         divRef.current?.focus();
+        const range = savedRange.current ?? (divRef.current ? getEditorRange(divRef.current) : null);
         if (range) restoreRange(range);
         document.execCommand(command, false, value ?? undefined);
+        rememberSelection();
         onChange(divRef.current?.innerHTML ?? "");
         onSelectionChange(queryState());
       },
 
       captureSelection() {
-        savedRange.current = saveRange();
+        rememberSelection();
         return window.getSelection()?.toString() ?? "";
       },
 
@@ -149,19 +171,23 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
       e.preventDefault();
       const [cmd, val] = map[key];
       document.execCommand(cmd, false, val);
+      rememberSelection();
       onChange(divRef.current?.innerHTML ?? "");
       onSelectionChange(queryState());
     }
 
     function handleInput() {
+      rememberSelection();
       onChange(divRef.current?.innerHTML ?? "");
     }
 
     function handleMouseUp() {
+      rememberSelection();
       onSelectionChange(queryState());
     }
 
     function handleKeyUp() {
+      rememberSelection();
       onSelectionChange(queryState());
     }
 
@@ -175,6 +201,7 @@ export const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         onKeyDown={handleKeyDown}
         onMouseUp={handleMouseUp}
         onKeyUp={handleKeyUp}
+        onFocus={rememberSelection}
         aria-label="Document content"
         aria-multiline="true"
         role={readOnly ? "document" : "textbox"}
