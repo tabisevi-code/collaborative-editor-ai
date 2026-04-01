@@ -1,0 +1,98 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+
+import type { ApiClient } from "../services/api";
+import { ApiError, type GetDocumentResponse } from "../types/api";
+import { DocumentPage } from "./DocumentPage";
+
+function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
+  return render(
+    <MemoryRouter
+      initialEntries={["/documents/doc_123"]}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
+      <Routes>
+        <Route path="/documents/:documentId" element={<DocumentPage apiClient={apiClient} userId={userId} />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+describe("DocumentPage", () => {
+  it("renders viewer mode as read-only", async () => {
+    const apiClient: ApiClient = {
+      createDocument: vi.fn(),
+      getDocument: vi.fn(async () => ({
+        documentId: "doc_123",
+        title: "Shared Doc",
+        content: "Read only text",
+        updatedAt: "2026-04-02T00:00:00.000Z",
+        currentVersionId: "ver_1",
+        role: "viewer",
+        revisionId: "rev_1",
+      }) satisfies GetDocumentResponse),
+    };
+
+    renderDocumentPage(apiClient, "user_2");
+
+    await waitFor(() => {
+      expect(screen.getByText("View-only mode")).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText("Document Content")).toHaveAttribute("readonly");
+  });
+
+  it("shows an unsaved draft hint for editable roles", async () => {
+    const apiClient: ApiClient = {
+      createDocument: vi.fn(),
+      getDocument: vi.fn(async () => ({
+        documentId: "doc_123",
+        title: "Editable Doc",
+        content: "Original body",
+        updatedAt: "2026-04-02T00:00:00.000Z",
+        currentVersionId: "ver_1",
+        role: "owner",
+        revisionId: "rev_1",
+      }) satisfies GetDocumentResponse),
+    };
+
+    renderDocumentPage(apiClient);
+
+    const editor = await screen.findByLabelText("Document Content");
+    fireEvent.change(editor, { target: { value: "Changed locally" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("Unsaved local draft")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a document not found banner for 404 errors", async () => {
+    const apiClient: ApiClient = {
+      createDocument: vi.fn(),
+      getDocument: vi.fn(async () => {
+        throw new ApiError(404, "NOT_FOUND", "document not found");
+      }),
+    };
+
+    renderDocumentPage(apiClient);
+
+    await waitFor(() => {
+      expect(screen.getByText("Document not found.")).toBeInTheDocument();
+    });
+  });
+
+  it("shows a backend unavailable banner for network failures", async () => {
+    const apiClient: ApiClient = {
+      createDocument: vi.fn(),
+      getDocument: vi.fn(async () => {
+        throw new ApiError(0, "NETWORK_ERROR", "backend unavailable");
+      }),
+    };
+
+    renderDocumentPage(apiClient);
+
+    await waitFor(() => {
+      expect(screen.getByText(/backend is unavailable/i)).toBeInTheDocument();
+    });
+  });
+});
