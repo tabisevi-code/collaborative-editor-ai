@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { GetDocumentResponse } from "../types/api";
+import type { ToolbarAction } from "../lib/richTextToolbar";
 
 type SaveState = "saved" | "unsaved" | "saving" | "error";
 
@@ -17,6 +18,7 @@ interface DocHeaderProps {
   onPermissionsOpen?(): void;
   onAiPolicyOpen?(): void;
   onExportOpen?(): void;
+  onToolbarAction?(action: ToolbarAction): void;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -54,12 +56,14 @@ export function DocHeader({
   onPermissionsOpen,
   onAiPolicyOpen,
   onExportOpen,
+  onToolbarAction,
 }: DocHeaderProps) {
   const role = document?.role ?? "viewer";
   const isReadOnly = role === "viewer";
   const isTitleReadOnly = isReadOnly || !canEditTitle;
   const initial = userId.charAt(0).toUpperCase() || "U";
   const canSave = !isReadOnly && (saveState === "unsaved" || saveState === "error");
+  const canFormat = !isReadOnly && Boolean(onToolbarAction);
 
   return (
     <>
@@ -153,12 +157,12 @@ export function DocHeader({
       {/* ── Format toolbar ──────────────────────────────────────────── */}
       <div className="gdoc-toolbar" role="toolbar" aria-label="Formatting">
         {/* Undo / Redo / Print */}
-        <button className="gdoc-tb-btn" title="Undo (Ctrl+Z)">
+        <button className="gdoc-tb-btn" title="Undo (Ctrl+Z)" onClick={() => onToolbarAction?.("undo")} disabled={!canFormat}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
           </svg>
         </button>
-        <button className="gdoc-tb-btn" title="Redo (Ctrl+Y)">
+        <button className="gdoc-tb-btn" title="Redo (Ctrl+Y)" onClick={() => onToolbarAction?.("redo")} disabled={!canFormat}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
           </svg>
@@ -205,10 +209,10 @@ export function DocHeader({
 
         <div className="gdoc-toolbar-sep" />
 
-        <button className="gdoc-tb-btn" disabled title="Bold" style={{ fontWeight: 700 }}>B</button>
-        <button className="gdoc-tb-btn" disabled title="Italic" style={{ fontStyle: "italic" }}>I</button>
-        <button className="gdoc-tb-btn" disabled title="Underline" style={{ textDecoration: "underline" }}>U</button>
-        <button className="gdoc-tb-btn" disabled title="Strikethrough" style={{ textDecoration: "line-through", fontSize: 12 }}>S</button>
+        <button className="gdoc-tb-btn" disabled={!canFormat} onClick={() => onToolbarAction?.("bold")} title="Bold" style={{ fontWeight: 700 }}>B</button>
+        <button className="gdoc-tb-btn" disabled={!canFormat} onClick={() => onToolbarAction?.("italic")} title="Italic" style={{ fontStyle: "italic" }}>I</button>
+        <button className="gdoc-tb-btn" disabled={!canFormat} onClick={() => onToolbarAction?.("underline")} title="Underline" style={{ textDecoration: "underline" }}>U</button>
+        <button className="gdoc-tb-btn" disabled={!canFormat} onClick={() => onToolbarAction?.("strike")} title="Strikethrough" style={{ textDecoration: "line-through", fontSize: 12 }}>S</button>
 
         <div className="gdoc-toolbar-sep" />
 
@@ -227,7 +231,7 @@ export function DocHeader({
 
         <div className="gdoc-toolbar-sep" />
 
-        <button className="gdoc-tb-btn" disabled title="Bulleted list">
+        <button className="gdoc-tb-btn" disabled={!canFormat} onClick={() => onToolbarAction?.("bulletList")} title="Bulleted list">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
             <circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/>
@@ -235,7 +239,7 @@ export function DocHeader({
             <circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/>
           </svg>
         </button>
-        <button className="gdoc-tb-btn" disabled title="Numbered list">
+        <button className="gdoc-tb-btn" disabled={!canFormat} onClick={() => onToolbarAction?.("numberedList")} title="Numbered list">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/>
             <path d="M4 6h1v4M4 10h2M4 14a1 1 0 011-1h1a1 1 0 010 2H4.5a1 1 0 000 2H6" strokeLinejoin="round"/>

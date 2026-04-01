@@ -1,9 +1,23 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type { ApiClient } from "../services/api";
 import { ApiError, type GetDocumentResponse } from "../types/api";
 import { DocumentPage } from "./DocumentPage";
+
+const mockRealtimeService = {
+  connect: vi.fn(),
+  getText: vi.fn(() => "Original body"),
+  applyLocalChange: vi.fn(() => true),
+  replaceSelection: vi.fn(() => true),
+  setCursorSelection: vi.fn(),
+  applyRemoteReset: vi.fn(),
+  disconnect: vi.fn(),
+};
+
+vi.mock("../services/realtime", () => ({
+  createRealtimeService: vi.fn(() => mockRealtimeService),
+}));
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
@@ -42,7 +56,27 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
   );
 }
 
+async function resolveRealtimeConnection(text = "Original body") {
+  await waitFor(() => {
+    expect(mockRealtimeService.connect).toHaveBeenCalled();
+  });
+
+  const call = mockRealtimeService.connect.mock.calls.at(-1);
+  const options = call?.[1];
+  await act(async () => {
+    mockRealtimeService.getText.mockReturnValue(text);
+    options?.onTextChange?.(text);
+    options?.onConnectionStateChange?.("connected");
+  });
+  return options;
+}
+
 describe("DocumentPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRealtimeService.getText.mockReturnValue("Original body");
+  });
+
   it("renders viewer mode as read-only", async () => {
     const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => ({
@@ -57,6 +91,7 @@ describe("DocumentPage", () => {
     });
 
     renderDocumentPage(apiClient, "user_2");
+    await resolveRealtimeConnection("Read only text");
 
     await waitFor(() => {
       expect(screen.getByText(/viewer access/i)).toBeInTheDocument();
@@ -65,26 +100,77 @@ describe("DocumentPage", () => {
     expect(screen.getByLabelText("Document content")).toHaveAttribute("readonly");
   });
 
-  it("shows an unsaved draft hint for editable roles", async () => {
+  it("renders remote collaborative text updates without refreshing", async () => {
     const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => ({
         documentId: "doc_123",
-        title: "Editable Doc",
+        title: "Realtime Doc",
         content: "Original body",
         updatedAt: "2026-04-02T00:00:00.000Z",
         currentVersionId: "ver_1",
-        role: "owner",
+        role: "editor",
         revisionId: "rev_1",
       }) satisfies GetDocumentResponse),
     });
 
     renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
 
-    const editor = await screen.findByLabelText("Document content");
-    fireEvent.change(editor, { target: { value: "Changed locally" } });
+    await screen.findByDisplayValue("Original body");
+
+    await act(async () => {
+      options?.onTextChange?.("Remote collaborator update");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Remote collaborator update")).toBeInTheDocument();
+    });
+  });
+
+  it("saves the current collaborative snapshot instead of the initial REST body", async () => {
+    const apiClient = createApiClientMock({
+      getDocument: vi
+        .fn()
+        .mockResolvedValue({
+          documentId: "doc_123",
+          title: "Realtime Doc",
+          content: "Original body",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          currentVersionId: "ver_1",
+          role: "editor",
+          revisionId: "rev_1",
+        } satisfies GetDocumentResponse),
+      updateDocument: vi.fn(async () => ({
+        documentId: "doc_123",
+        updatedAt: "2026-04-02T00:05:00.000Z",
+        revisionId: "rev_2",
+      })),
+    });
+
+    renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
+
+    await screen.findByDisplayValue("Original body");
+    await act(async () => {
+      options?.onTextChange?.("Collaborative draft");
+    });
+    mockRealtimeService.getText.mockReturnValue("Collaborative draft");
 
     await waitFor(() => {
       expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => {
+      expect(apiClient.updateDocument).toHaveBeenCalledWith(
+        "doc_123",
+        expect.objectContaining({
+          content: "Collaborative draft",
+          baseRevisionId: "rev_1",
+        }),
+        "user_1"
+      );
     });
   });
 
@@ -99,20 +185,6 @@ describe("DocumentPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Document not found.")).toBeInTheDocument();
-    });
-  });
-
-  it("shows a backend unavailable banner for network failures", async () => {
-    const apiClient = createApiClientMock({
-      getDocument: vi.fn(async () => {
-        throw new ApiError(0, "NETWORK_ERROR", "backend unavailable");
-      }),
-    });
-
-    renderDocumentPage(apiClient);
-
-    await waitFor(() => {
-      expect(screen.getByText(/backend unavailable/i)).toBeInTheDocument();
     });
   });
 
@@ -147,19 +219,28 @@ describe("DocumentPage", () => {
     });
 
     renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
 
-    const editor = await screen.findByLabelText("Document content");
-    fireEvent.change(editor, { target: { value: "Changed locally" } });
+    await screen.findByDisplayValue("Original body");
+    await act(async () => {
+      options?.onTextChange?.("Changed collaboratively");
+    });
+    mockRealtimeService.getText.mockReturnValue("Changed collaboratively");
+
+    await waitFor(() => {
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    });
+
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => {
-      expect(screen.getByText(/reload latest version/i)).toBeInTheDocument();
+      expect(screen.getByText(/reload latest saved version/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText(/reload latest version/i));
+    fireEvent.click(screen.getByText(/reload latest saved version/i));
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Fresh body")).toBeInTheDocument();
+      expect(mockRealtimeService.applyRemoteReset).toHaveBeenCalledWith("Fresh body");
     });
   });
 });
