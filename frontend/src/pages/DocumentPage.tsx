@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { AiPanel } from "../components/AiPanel";
 import { DocHeader } from "../components/DocHeader";
 import { MetadataCard } from "../components/MetadataCard";
+import { RichEditor, INITIAL_FORMATTING, type FormattingState, type RichEditorHandle } from "../components/RichEditor";
 import { StatusBanner } from "../components/StatusBanner";
 import { VersionHistoryPanel } from "../components/VersionHistoryPanel";
 import type { ApiClient } from "../services/api";
@@ -23,28 +24,39 @@ function mapDocumentError(error: ApiError): string {
   return error.message || "The document could not be loaded.";
 }
 
-function wordCount(text: string): number {
-  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+function stripHTML(html: string): string {
+  const div = window.document.createElement("div");
+  div.innerHTML = html;
+  return div.textContent ?? div.innerText ?? "";
+}
+
+function wordCount(html: string): number {
+  const text = stripHTML(html).trim();
+  return text === "" ? 0 : text.split(/\s+/).length;
 }
 
 export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
   const { documentId = "" } = useParams();
-  const [document, setDocument]       = useState<GetDocumentResponse | null>(null);
-  const [draftContent, setDraftContent] = useState("");
-  const [draftTitle, setDraftTitle]   = useState("");
-  const [isLoading, setIsLoading]     = useState(true);
+
+  const [document, setDocument]         = useState<GetDocumentResponse | null>(null);
+  const [draftTitle, setDraftTitle]     = useState("");
+  const [isLoading, setIsLoading]       = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [saveState, setSaveState]     = useState<SaveState>("saved");
-  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [saveState, setSaveState]       = useState<SaveState>("saved");
+  const [formattingState, setFormattingState] = useState<FormattingState>(INITIAL_FORMATTING);
+  const [showAiPanel, setShowAiPanel]         = useState(false);
   const [showVersionPanel, setShowVersionPanel] = useState(false);
-  const [showMeta, setShowMeta]       = useState(false);
-  const [selectedText, setSelectedText] = useState("");
+  const [showMeta, setShowMeta]               = useState(false);
+  const [selectedText, setSelectedText]       = useState("");
 
-  const textareaRef  = useRef<HTMLTextAreaElement>(null);
+  const editorRef    = useRef<RichEditorHandle>(null);
   const requestIdRef = useRef(0);
-  const aiService    = createAiService(apiClient, userId);
+  const isDirty      = useRef(false);
+  const savedContent = useRef("");
 
-  /* ── Load document ─────────────────────────────────────────────────── */
+  const aiService = createAiService(apiClient, userId);
+
+  // ── Load document ─────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -52,13 +64,15 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
       setIsLoading(true);
       setErrorMessage(null);
       setSaveState("saved");
+      isDirty.current = false;
 
       try {
         const fetched = await apiClient.getDocument(documentId, userId);
         if (cancelled) return;
         setDocument(fetched);
-        setDraftContent(fetched.content);
         setDraftTitle(fetched.title);
+        savedContent.current = fetched.content;
+        // RichEditor will pick up initialHTML on its first render
       } catch (error) {
         if (cancelled) return;
         const apiError = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN_ERROR", "unknown error");
@@ -72,76 +86,87 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
     return () => { cancelled = true; };
   }, [apiClient, documentId, userId]);
 
-  /* ── Track unsaved state ───────────────────────────────────────────── */
-  useEffect(() => {
-    if (!document) return;
-    const dirty = draftContent !== document.content || draftTitle !== document.title;
-    setSaveState((prev) => {
-      if (prev === "saving") return prev;
-      return dirty ? "unsaved" : "saved";
-    });
-  }, [draftContent, draftTitle, document]);
+  // ── Track save state when content changes ─────────────────────────────
+  function handleContentChange(html: string) {
+    if (html !== savedContent.current) {
+      isDirty.current = true;
+      setSaveState("unsaved");
+    } else {
+      isDirty.current = false;
+      setSaveState("saved");
+    }
+  }
 
-  /* ── Save ──────────────────────────────────────────────────────────── */
+  // ── Save ──────────────────────────────────────────────────────────────
   async function handleSave() {
     if (!document || saveState === "saving") return;
+    const html = editorRef.current?.getHTML() ?? "";
+
     setSaveState("saving");
     requestIdRef.current += 1;
     const requestId = `req_${Date.now()}_${requestIdRef.current}`;
 
     try {
-      const updated = await apiClient.updateDocument(
-        documentId,
-        { content: draftContent, requestId },
-        userId
-      );
-      setDocument((prev) =>
-        prev ? { ...prev, content: draftContent, updatedAt: updated.updatedAt, revisionId: updated.revisionId } : prev
+      const updated = await apiClient.updateDocument(documentId, { content: html, requestId }, userId);
+      savedContent.current = html;
+      setDocument((prev) => prev
+        ? { ...prev, content: html, updatedAt: updated.updatedAt, revisionId: updated.revisionId }
+        : prev
       );
       setSaveState("saved");
+      isDirty.current = false;
     } catch {
       setSaveState("error");
     }
   }
 
-  /* ── Text selection for AI ─────────────────────────────────────────── */
-  function captureSelection() {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const { selectionStart: s, selectionEnd: e } = ta;
-    if (s !== e) setSelectedText(draftContent.slice(s, e));
+  // ── Format command (from toolbar) ─────────────────────────────────────
+  function handleFormat(command: string, value?: string) {
+    editorRef.current?.format(command, value);
   }
 
-  /* ── AI apply ──────────────────────────────────────────────────────── */
+  // ── AI ────────────────────────────────────────────────────────────────
+  function handleAiOpen() {
+    const text = editorRef.current?.captureSelection() ?? "";
+    setSelectedText(text);
+    setShowAiPanel(true);
+  }
+
   function handleAiApply(suggestion: string) {
-    const ta = textareaRef.current;
-    if (!ta) {
-      setDraftContent((prev) => prev + "\n\n" + suggestion);
-      return;
-    }
-    const { selectionStart: s, selectionEnd: e } = ta;
-    setDraftContent(draftContent.slice(0, s) + suggestion + draftContent.slice(e));
+    editorRef.current?.replaceSelection(suggestion);
+    const html = editorRef.current?.getHTML() ?? "";
+    handleContentChange(html);
   }
 
-  /* ── Revert ────────────────────────────────────────────────────────── */
+  // ── Revert ────────────────────────────────────────────────────────────
   function handleRevert() {
     void (async () => {
       try {
         const refreshed = await apiClient.getDocument(documentId, userId);
         setDocument(refreshed);
-        setDraftContent(refreshed.content);
         setDraftTitle(refreshed.title);
+        savedContent.current = refreshed.content;
+        // Force editor re-init by re-mounting with new key handled inside RichEditor
+        if (editorRef.current) {
+          // RichEditor won't re-init because initialized.current is true —
+          // manually set innerHTML to refreshed content
+          const div = (editorRef.current as unknown as { divRef?: { current: HTMLDivElement | null } }).divRef?.current;
+          if (div) {
+            div.innerHTML = refreshed.content || "<p><br></p>";
+          }
+        }
         setSaveState("saved");
-      } catch { /* silently ignore */ }
+        isDirty.current = false;
+      } catch { /* ignore */ }
     })();
   }
 
   const isReadOnly = document?.role === "viewer";
   const canRevert  = document?.role === "owner" || document?.role === "editor";
+  const currentHTML = editorRef.current?.getHTML() ?? document?.content ?? "";
 
   return (
     <div className="gdoc-shell">
-      {/* Header (top bar + menu bar + format toolbar) */}
       <DocHeader
         document={document}
         draftTitle={draftTitle}
@@ -149,18 +174,19 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
         saveState={saveState}
         userId={userId}
         onSave={handleSave}
-        onAiOpen={() => { captureSelection(); setShowAiPanel(true); }}
+        onAiOpen={handleAiOpen}
         onHistoryOpen={() => setShowVersionPanel(true)}
+        formattingState={formattingState}
+        onFormat={handleFormat}
       />
 
-      {/* Paper area */}
+      {/* Paper canvas */}
       <div className="gdoc-page-area">
         {isLoading && (
           <div style={{ maxWidth: 816, margin: "0 auto", padding: "1rem 96px" }}>
             <StatusBanner tone="info" title="Loading" message="Fetching document from backend…" />
           </div>
         )}
-
         {errorMessage && (
           <div style={{ maxWidth: 816, margin: "0 auto", padding: "1rem 96px" }}>
             <StatusBanner tone="error" title="Load Failed" message={errorMessage} />
@@ -170,32 +196,27 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
         {document && (
           <div className="gdoc-page">
             {isReadOnly && (
-              <div style={{ marginBottom: "1rem" }}>
+              <div style={{ marginBottom: "1.5rem" }}>
                 <StatusBanner tone="warning" title="View-only" message="You have viewer access — editing is disabled." />
               </div>
             )}
-
             {saveState === "error" && (
-              <div style={{ marginBottom: "1rem" }}>
-                <StatusBanner tone="error" title="Save failed" message="Could not save — the save endpoint may not be available yet." />
+              <div style={{ marginBottom: "1.5rem" }}>
+                <StatusBanner tone="error" title="Save failed" message="Could not reach the save endpoint. Changes remain local." />
               </div>
             )}
 
-            <textarea
-              ref={textareaRef}
-              className="gdoc-editor"
-              value={draftContent}
-              onChange={(e) => setDraftContent(e.target.value)}
-              onMouseUp={captureSelection}
-              onKeyUp={captureSelection}
+            <RichEditor
+              ref={editorRef}
+              initialHTML={document.content}
+              onChange={handleContentChange}
+              onSelectionChange={setFormattingState}
               readOnly={isReadOnly}
-              aria-label="Document content"
-              spellCheck
-              autoFocus={!isReadOnly}
+              className="gdoc-editor"
             />
 
             {showMeta && (
-              <div style={{ marginTop: "2rem", borderTop: "1px solid var(--gd-border)", paddingTop: "1.5rem" }}>
+              <div style={{ marginTop: "2.5rem", borderTop: "1px solid var(--gd-border)", paddingTop: "1.5rem" }}>
                 <MetadataCard document={document} />
               </div>
             )}
@@ -208,29 +229,19 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
         {document && (
           <>
             <button className="gdoc-statusbar-btn" onClick={() => setShowMeta((v) => !v)}>
-              {showMeta ? "Hide" : "Info"}
+              {showMeta ? "Hide info" : "Info"}
             </button>
             <span>·</span>
-            <span>{wordCount(draftContent).toLocaleString()} words</span>
+            <span>{wordCount(currentHTML).toLocaleString()} words</span>
             <span>·</span>
-            <span>{draftContent.length.toLocaleString()} characters</span>
-            {document.updatedAt && (
-              <>
-                <span>·</span>
-                <span>
-                  Last updated{" "}
-                  {new Intl.DateTimeFormat(undefined, {
-                    month: "short", day: "numeric",
-                    hour: "2-digit", minute: "2-digit",
-                  }).format(new Date(document.updatedAt))}
-                </span>
-              </>
-            )}
+            <span>
+              Updated{" "}
+              {new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(document.updatedAt))}
+            </span>
           </>
         )}
       </footer>
 
-      {/* AI Side Panel */}
       {showAiPanel && document && (
         <AiPanel
           documentId={documentId}
@@ -241,7 +252,6 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
         />
       )}
 
-      {/* Version History Panel */}
       {showVersionPanel && (
         <VersionHistoryPanel
           documentId={documentId}
