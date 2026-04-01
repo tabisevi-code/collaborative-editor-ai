@@ -1,9 +1,15 @@
 import {
   ApiError,
   type ApiErrorShape,
+  type AiJobRequest,
+  type AiJobResponse,
   type CreateDocumentRequest,
   type CreateDocumentResponse,
   type GetDocumentResponse,
+  type ListVersionsResponse,
+  type RevertToVersionResponse,
+  type UpdateDocumentRequest,
+  type UpdateDocumentResponse,
 } from "../types/api";
 
 type FetchLike = typeof fetch;
@@ -11,6 +17,11 @@ type FetchLike = typeof fetch;
 export interface ApiClient {
   createDocument(payload: CreateDocumentRequest, userId?: string): Promise<CreateDocumentResponse>;
   getDocument(documentId: string, userId?: string): Promise<GetDocumentResponse>;
+  updateDocument(documentId: string, payload: UpdateDocumentRequest, userId?: string): Promise<UpdateDocumentResponse>;
+  listVersions(documentId: string, userId?: string): Promise<ListVersionsResponse>;
+  revertToVersion(documentId: string, targetVersionId: string, userId?: string): Promise<RevertToVersionResponse>;
+  requestAiJob(payload: AiJobRequest, userId?: string): Promise<AiJobResponse>;
+  getAiJobStatus(jobId: string, userId?: string): Promise<AiJobResponse>;
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -50,10 +61,6 @@ function toUnexpectedError(error: unknown): ApiError {
   return new ApiError(0, "UNKNOWN_ERROR", "unexpected frontend error");
 }
 
-/**
- * The client mirrors the backend contract and centralizes header handling.
- * That keeps page components focused on UX state instead of transport details.
- */
 export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): ApiClient {
   const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
 
@@ -98,21 +105,49 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
     createDocument(payload, userId) {
       return request<CreateDocumentResponse>(
         "/documents",
-        {
-          method: "POST",
-          body: JSON.stringify(payload),
-        },
+        { method: "POST", body: JSON.stringify(payload) },
         userId
       );
     },
+
     getDocument(documentId, userId) {
       return request<GetDocumentResponse>(
         `/documents/${encodeURIComponent(documentId)}`,
-        {
-          method: "GET",
-        },
+        { method: "GET" },
         userId
       );
+    },
+
+    updateDocument(documentId, payload, userId) {
+      return request<UpdateDocumentResponse>(
+        `/documents/${encodeURIComponent(documentId)}/content`,
+        { method: "PUT", body: JSON.stringify(payload) },
+        userId
+      );
+    },
+
+    listVersions(documentId, userId) {
+      return request<ListVersionsResponse>(
+        `/documents/${encodeURIComponent(documentId)}/versions`,
+        { method: "GET" },
+        userId
+      );
+    },
+
+    revertToVersion(documentId, targetVersionId, userId) {
+      return request<RevertToVersionResponse>(
+        `/documents/${encodeURIComponent(documentId)}/revert`,
+        { method: "POST", body: JSON.stringify({ targetVersionId }) },
+        userId
+      );
+    },
+
+    requestAiJob(payload, userId) {
+      return request<AiJobResponse>("/ai/jobs", { method: "POST", body: JSON.stringify(payload) }, userId);
+    },
+
+    getAiJobStatus(jobId, userId) {
+      return request<AiJobResponse>(`/ai/jobs/${encodeURIComponent(jobId)}`, { method: "GET" }, userId);
     },
   };
 }

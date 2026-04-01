@@ -22,6 +22,56 @@ export interface GetDocumentResponse {
   revisionId: string;
 }
 
+export interface UpdateDocumentRequest {
+  content: string;
+  requestId: string;
+}
+
+export interface UpdateDocumentResponse {
+  updatedAt: string;
+  revisionId: string;
+}
+
+export interface VersionSummary {
+  versionId: string;
+  versionNumber: number;
+  createdAt: string;
+  createdBy: string;
+  reason: string;
+}
+
+export interface ListVersionsResponse {
+  versions: VersionSummary[];
+  nextCursor?: string;
+}
+
+export interface RevertToVersionRequest {
+  targetVersionId: string;
+}
+
+export interface RevertToVersionResponse {
+  documentId: string;
+  newVersionId: string;
+  updatedAt: string;
+}
+
+export type AiAction = "rewrite" | "summarize" | "translate";
+
+export interface AiJobRequest {
+  documentId: string;
+  action: AiAction;
+  text: string;
+  targetLanguage?: string;
+}
+
+export interface AiJobResponse {
+  jobId: string;
+  statusUrl: string;
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  output?: string;
+  errorMessage?: string;
+}
+
 export interface ApiErrorShape {
   error: {
     code: string;

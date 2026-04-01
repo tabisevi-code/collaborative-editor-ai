@@ -1,32 +1,29 @@
+import { Link } from "react-router-dom";
+
 interface AppBarProps {
-  apiBaseUrl: string;
   userId: string;
   onUserIdChange(nextValue: string): void;
 }
 
-/**
- * The top bar exposes the active backend target and user identity so demos can
- * switch between owner/viewer roles without touching code or devtools.
- */
-export function AppBar({ apiBaseUrl, userId, onUserIdChange }: AppBarProps) {
+export function AppBar({ userId, onUserIdChange }: AppBarProps) {
+  const initial = userId.charAt(0).toUpperCase() || "U";
+
   return (
     <header className="topbar">
-      <div>
-        <p className="eyebrow">Frontend PoC</p>
-        <h1>Collaborative Editor AI</h1>
-      </div>
-      <div className="topbar-meta">
-        <div className="topbar-chip">
-          <span className="chip-label">API Base URL</span>
-          <span className="chip-value">{apiBaseUrl}</span>
-        </div>
-        <label className="user-field">
-          <span className="chip-label">User ID</span>
+      <Link to="/" className="topbar-brand">
+        <div className="topbar-logo">CE</div>
+        <span className="topbar-title">Collaborative Editor</span>
+      </Link>
+
+      <div className="topbar-actions">
+        <label className="user-chip" title="Active user ID — change to switch roles">
+          <div className="user-avatar">{initial}</div>
           <input
             value={userId}
-            onChange={(event) => onUserIdChange(event.target.value)}
+            onChange={(e) => onUserIdChange(e.target.value)}
             placeholder="user_1"
             aria-label="User ID"
+            spellCheck={false}
           />
         </label>
       </div>

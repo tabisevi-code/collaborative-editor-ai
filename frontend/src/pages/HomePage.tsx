@@ -1,11 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { EditorPanel } from "../components/EditorPanel";
-import { MetadataCard } from "../components/MetadataCard";
 import { StatusBanner } from "../components/StatusBanner";
 import type { ApiClient } from "../services/api";
-import { ApiError, type CreateDocumentResponse } from "../types/api";
+import { ApiError } from "../types/api";
 
 interface HomePageProps {
   apiClient: ApiClient;
@@ -13,21 +11,11 @@ interface HomePageProps {
 }
 
 function mapHomeError(error: ApiError): string {
-  if (error.status === 400 || error.status === 413) {
-    return error.message;
-  }
-
-  if (error.code === "NETWORK_ERROR") {
-    return "The backend is unavailable. Start the backend service and try again.";
-  }
-
-  return "The request could not be completed. Please try again.";
+  if (error.status === 400 || error.status === 413) return error.message;
+  if (error.code === "NETWORK_ERROR") return "Backend unavailable. Start the backend service and try again.";
+  return "Request could not be completed. Please try again.";
 }
 
-/**
- * The landing page combines the two required PoC flows: create a fresh
- * document or open an existing one by ID.
- */
 export function HomePage({ apiClient, userId }: HomePageProps) {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
@@ -35,33 +23,20 @@ export function HomePage({ apiClient, userId }: HomePageProps) {
   const [documentIdToOpen, setDocumentIdToOpen] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOpening, setIsOpening] = useState(false);
-  const [lastCreatedDocument, setLastCreatedDocument] = useState<CreateDocumentResponse | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setErrorMessage(null);
-    setStatusMessage("Creating document...");
 
     try {
-      const createdDocument = await apiClient.createDocument(
-        {
-          title,
-          content,
-        },
-        userId
-      );
-
-      setLastCreatedDocument(createdDocument);
-      setStatusMessage("Document created. Redirecting to document view...");
-      console.info("[frontend-home] document_created", { documentId: createdDocument.documentId });
-      navigate(`/documents/${createdDocument.documentId}`);
+      const created = await apiClient.createDocument({ title, content }, userId);
+      console.info("[frontend-home] document_created", { documentId: created.documentId });
+      navigate(`/documents/${created.documentId}`);
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN_ERROR", "unknown error");
       setErrorMessage(mapHomeError(apiError));
-      setStatusMessage(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -69,72 +44,132 @@ export function HomePage({ apiClient, userId }: HomePageProps) {
 
   function handleOpenSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage(null);
-    setStatusMessage("Opening document...");
     setIsOpening(true);
-
     const trimmedId = documentIdToOpen.trim();
     navigate(`/documents/${encodeURIComponent(trimmedId)}`);
-
   }
 
   return (
-    <div className="page-grid">
-      <section className="panel">
-        <div className="panel-header">
-          <h2>Create Document</h2>
-          <p>Submit a title and plain-text content to the current backend PoC.</p>
-        </div>
-        <form className="stack" onSubmit={handleCreateSubmit}>
-          <label className="field">
-            <span className="field-label">Title</span>
-            <input
-              className="text-input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Quarterly review notes"
-              aria-label="Title"
-            />
-          </label>
-          <EditorPanel
-            label="Initial Content"
-            value={content}
-            onChange={setContent}
-            hint="This content stays plain text so it matches the current backend contract."
-          />
-          <button className="primary-button" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Document"}
-          </button>
-        </form>
-      </section>
+    <div className="page-stack">
+      {/* Hero */}
+      <div className="home-hero">
+        <p className="eyebrow">Collaborative Editor AI</p>
+        <h1>Write, collaborate, and improve with AI</h1>
+        <p>Create documents, share with your team, and use AI to rewrite, summarize, or translate your content.</p>
+      </div>
 
-      <section className="stack">
+      {/* Two-column grid */}
+      <div className="page-grid">
+        {/* Create document */}
         <section className="panel">
           <div className="panel-header">
-            <h2>Open Existing Document</h2>
-            <p>Paste a document ID returned by the backend and open the document page.</p>
+            <div>
+              <h2>New Document</h2>
+              <p>Start writing — you'll become the owner.</p>
+            </div>
           </div>
-          <form className="stack" onSubmit={handleOpenSubmit}>
-            <label className="field">
-              <span className="field-label">Document ID</span>
+
+          <form className="stack" onSubmit={handleCreateSubmit}>
+            <div className="field">
+              <label className="field-label" htmlFor="doc-title">Title</label>
               <input
+                id="doc-title"
                 className="text-input"
-                value={documentIdToOpen}
-                onChange={(event) => setDocumentIdToOpen(event.target.value)}
-                placeholder="doc_123"
-                aria-label="Document ID"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Quarterly review notes"
+                aria-label="Document title"
+                required
               />
-            </label>
-            <button className="secondary-button" type="submit" disabled={isOpening || !documentIdToOpen.trim()}>
-              {isOpening ? "Opening..." : "Open Document"}
+            </div>
+
+            <div className="field">
+              <label className="field-label" htmlFor="doc-content">Initial content <span style={{ fontWeight: 400, color: "var(--color-text-muted)" }}>(optional)</span></label>
+              <textarea
+                id="doc-content"
+                className="editor-input"
+                style={{ minHeight: "160px" }}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Start writing, or leave blank…"
+                aria-label="Initial content"
+              />
+            </div>
+
+            {errorMessage && (
+              <StatusBanner tone="error" title="Error" message={errorMessage} />
+            )}
+
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={isSubmitting || !title.trim()}
+              style={{ alignSelf: "flex-start" }}
+            >
+              {isSubmitting ? "Creating…" : "Create Document →"}
             </button>
           </form>
         </section>
 
-        {statusMessage ? <StatusBanner tone="info" title="Request Status" message={statusMessage} /> : null}
-        {errorMessage ? <StatusBanner tone="error" title="Request Failed" message={errorMessage} /> : null}
-        {lastCreatedDocument ? <MetadataCard document={lastCreatedDocument} /> : null}
-      </section>
+        {/* Right column */}
+        <div className="stack">
+          {/* Open existing */}
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>Open Document</h2>
+                <p>Paste a document ID to open it.</p>
+              </div>
+            </div>
+
+            <form className="stack" onSubmit={handleOpenSubmit}>
+              <div className="field">
+                <label className="field-label" htmlFor="open-id">Document ID</label>
+                <input
+                  id="open-id"
+                  className="text-input"
+                  value={documentIdToOpen}
+                  onChange={(e) => setDocumentIdToOpen(e.target.value)}
+                  placeholder="doc_abc123"
+                  aria-label="Document ID"
+                  spellCheck={false}
+                />
+              </div>
+              <button
+                className="btn btn-secondary"
+                type="submit"
+                disabled={isOpening || !documentIdToOpen.trim()}
+                style={{ alignSelf: "flex-start" }}
+              >
+                {isOpening ? "Opening…" : "Open →"}
+              </button>
+            </form>
+          </section>
+
+          {/* Feature overview */}
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Features</h2>
+            </div>
+            <div className="stack" style={{ gap: "0.6rem" }}>
+              {[
+                { icon: "✏️", label: "Real-time collaboration", note: "Coming soon" },
+                { icon: "✨", label: "AI rewrite / summarize / translate", note: "Requires AI backend" },
+                { icon: "🕓", label: "Version history & revert", note: "Requires backend" },
+                { icon: "🔒", label: "Role-based access control", note: "owner · editor · viewer" },
+              ].map(({ icon, label, note }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "14px" }}>
+                  <span style={{ fontSize: "18px", width: "24px", textAlign: "center" }}>{icon}</span>
+                  <div>
+                    <span style={{ fontWeight: 500 }}>{label}</span>
+                    <span style={{ marginLeft: "0.4rem", fontSize: "12px", color: "var(--color-text-muted)" }}>{note}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

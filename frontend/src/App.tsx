@@ -33,7 +33,7 @@ export function App() {
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="app-shell">
-        <AppBar apiBaseUrl={API_BASE_URL} userId={userId} onUserIdChange={setUserId} />
+        <AppBar userId={userId} onUserIdChange={setUserId} />
         <main className="app-content">
           <Routes>
             <Route path="/" element={<HomePage apiClient={apiClient} userId={userId} />} />
