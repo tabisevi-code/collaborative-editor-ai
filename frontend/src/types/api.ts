@@ -59,6 +59,52 @@ export interface RevertToVersionResponse {
   updatedAt: string;
 }
 
+export type DocumentRole = "owner" | "editor" | "viewer";
+
+export interface DocumentPermissionMember {
+  userId: string;
+  role: DocumentRole;
+  updatedAt: string;
+}
+
+export interface ListPermissionsResponse {
+  documentId: string;
+  members: DocumentPermissionMember[];
+}
+
+export interface UpdatePermissionRequest {
+  requestId: string;
+  targetUserId: string;
+  role: Extract<DocumentRole, "editor" | "viewer">;
+}
+
+export interface UpdatePermissionResponse {
+  documentId: string;
+  targetUserId: string;
+  role: Extract<DocumentRole, "editor" | "viewer">;
+  updatedAt: string;
+}
+
+export interface RevokePermissionResponse {
+  documentId: string;
+  targetUserId: string;
+  revoked: boolean;
+}
+
+export interface AiPolicyResponse {
+  documentId: string;
+  aiEnabled: boolean;
+  allowedRolesForAI: DocumentRole[];
+  dailyQuota: number;
+  updatedAt: string;
+}
+
+export interface UpdateAiPolicyRequest {
+  aiEnabled: boolean;
+  allowedRolesForAI: DocumentRole[];
+  dailyQuota: number;
+}
+
 export type AiAction = "rewrite" | "summarize" | "translate";
 
 export interface TextSelection {
@@ -109,6 +155,49 @@ export interface AiJobResponse {
   baseVersionId?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type ExportFormat = "txt" | "json" | "pdf" | "docx";
+
+export interface CreateExportRequest {
+  format: ExportFormat;
+  requestId?: string;
+}
+
+export interface ReadyExportResponse {
+  downloadUrl: string;
+  expiresAt: string;
+  content: string;
+  contentType: string;
+  fileName: string;
+}
+
+export interface ExportJobResponse {
+  jobId: string;
+  statusUrl: string;
+}
+
+export type CreateExportResponse = ReadyExportResponse | ExportJobResponse;
+
+export interface ExportJobStatusResponse {
+  jobId: string;
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  downloadUrl: string | null;
+  expiresAt: string | null;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface DownloadedExportFile {
+  blob: Blob;
+  fileName: string;
+  contentType: string;
+}
+
+export interface RealtimeSessionResponse {
+  sessionId: string;
+  wsUrl: string;
+  role: DocumentRole;
 }
 
 export interface ApiErrorShape {

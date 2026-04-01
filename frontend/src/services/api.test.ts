@@ -84,4 +84,44 @@ describe("api client", () => {
       message: "title is required",
     } satisfies Partial<ApiError>);
   });
+
+  it("parses export job responses and session issuance responses", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/login")) {
+        return new Response(JSON.stringify({ userId: "user_export", accessToken: "token_export" }), { status: 200 });
+      }
+
+      if (url.endsWith("/documents/doc_123/export")) {
+        return new Response(JSON.stringify({ jobId: "expjob_123", statusUrl: "/exports/expjob_123" }), {
+          status: 202,
+        });
+      }
+
+      if (url.endsWith("/sessions")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "sess_123",
+            wsUrl: "ws://localhost:3001/ws?token=abc",
+            role: "editor",
+          }),
+          { status: 200 }
+        );
+      }
+
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const client = createApiClient("http://localhost:3000", fetchMock as typeof fetch);
+
+    await expect(client.createExport("doc_123", { format: "pdf" }, "user_export")).resolves.toMatchObject({
+      jobId: "expjob_123",
+      statusUrl: "/exports/expjob_123",
+    });
+
+    await expect(client.createSession("doc_123", "user_export")).resolves.toMatchObject({
+      sessionId: "sess_123",
+      role: "editor",
+    });
+  });
 });

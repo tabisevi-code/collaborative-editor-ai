@@ -10,9 +10,13 @@ interface DocHeaderProps {
   onTitleChange(title: string): void;
   saveState: SaveState;
   userId: string;
+  realtimeStatus?: string;
   onSave(): void;
   onAiOpen(): void;
   onHistoryOpen(): void;
+  onPermissionsOpen?(): void;
+  onAiPolicyOpen?(): void;
+  onExportOpen?(): void;
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -43,9 +47,13 @@ export function DocHeader({
   onTitleChange,
   saveState,
   userId,
+  realtimeStatus,
   onSave,
   onAiOpen,
   onHistoryOpen,
+  onPermissionsOpen,
+  onAiPolicyOpen,
+  onExportOpen,
 }: DocHeaderProps) {
   const role = document?.role ?? "viewer";
   const isReadOnly = role === "viewer";
@@ -81,10 +89,31 @@ export function DocHeader({
             </span>
             <span>·</span>
             <span className={`role-pill role-pill-${role}`}>{role}</span>
+            {realtimeStatus && (
+              <>
+                <span>·</span>
+                <span>{realtimeStatus}</span>
+              </>
+            )}
           </div>
         </div>
 
         <div className="gdoc-topbar-right">
+          {onPermissionsOpen && role === "owner" && (
+            <button className="btn btn-sm btn-secondary" onClick={onPermissionsOpen} title="Manage sharing">
+              Share
+            </button>
+          )}
+          {onAiPolicyOpen && role === "owner" && (
+            <button className="btn btn-sm btn-secondary" onClick={onAiPolicyOpen} title="Manage AI policy">
+              AI Policy
+            </button>
+          )}
+          {onExportOpen && (
+            <button className="btn btn-sm btn-secondary" onClick={onExportOpen} title="Export document">
+              Export
+            </button>
+          )}
           {!isReadOnly && (
             <button
               className="btn btn-sm btn-ghost"
