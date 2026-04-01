@@ -12,6 +12,7 @@ components:
   schemas:
     ErrorResponse:
       type: object
+      required: [error]
       properties:
         error:
           type: object
@@ -102,30 +103,89 @@ components:
           type: string
         baseRevisionId:
           type: string
+    UpdateContentResponse:
+      type: object
+      required: [documentId, updatedAt, revisionId]
+      properties:
+        documentId:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        revisionId:
+          type: string
+    VersionSummary:
+      type: object
+      required: [versionId, versionNumber, createdAt, createdBy, reason]
+      properties:
+        versionId:
+          type: string
+        versionNumber:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        reason:
+          type: string
     VersionListResponse:
       type: object
+      required: [documentId, versions]
       properties:
         documentId:
           type: string
         versions:
           type: array
           items:
-            type: object
-            properties:
-              versionId:
-                type: string
-              versionNumber:
-                type: integer
-              createdAt:
-                type: string
-              createdBy:
-                type: string
-              reason:
-                type: string
+            $ref: '#/components/schemas/VersionSummary'
         nextCursor:
           type: string
           nullable: true
-    PermissionUpdateRequest:
+    RevertRequest:
+      type: object
+      required: [requestId, targetVersionId]
+      properties:
+        requestId:
+          type: string
+        targetVersionId:
+          type: string
+    RevertResponse:
+      type: object
+      required: [documentId, currentVersionId, revertedFromVersionId, updatedAt]
+      properties:
+        documentId:
+          type: string
+        currentVersionId:
+          type: string
+        revertedFromVersionId:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    PermissionMember:
+      type: object
+      required: [userId, role, updatedAt]
+      properties:
+        userId:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+        updatedAt:
+          type: string
+          format: date-time
+    ListPermissionsResponse:
+      type: object
+      required: [documentId, members]
+      properties:
+        documentId:
+          type: string
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionMember'
+    UpdatePermissionRequest:
       type: object
       required: [requestId, targetUserId, role]
       properties:
@@ -136,13 +196,62 @@ components:
         role:
           type: string
           enum: [viewer, editor]
-    SessionRequest:
+    UpdatePermissionResponse:
       type: object
-      required: [documentId]
+      required: [documentId, targetUserId, role, updatedAt]
       properties:
         documentId:
           type: string
-    AiSelection:
+        targetUserId:
+          type: string
+        role:
+          type: string
+          enum: [viewer, editor]
+        updatedAt:
+          type: string
+          format: date-time
+    RevokePermissionResponse:
+      type: object
+      required: [documentId, targetUserId, revoked]
+      properties:
+        documentId:
+          type: string
+        targetUserId:
+          type: string
+        revoked:
+          type: boolean
+    AiPolicyResponse:
+      type: object
+      required: [documentId, aiEnabled, allowedRolesForAI, dailyQuota, updatedAt]
+      properties:
+        documentId:
+          type: string
+        aiEnabled:
+          type: boolean
+        allowedRolesForAI:
+          type: array
+          items:
+            type: string
+            enum: [owner, editor, viewer]
+        dailyQuota:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateAiPolicyRequest:
+      type: object
+      required: [aiEnabled, allowedRolesForAI, dailyQuota]
+      properties:
+        aiEnabled:
+          type: boolean
+        allowedRolesForAI:
+          type: array
+          items:
+            type: string
+            enum: [owner, editor, viewer]
+        dailyQuota:
+          type: integer
+    TextSelection:
       type: object
       required: [start, end]
       properties:
@@ -150,54 +259,220 @@ components:
           type: integer
         end:
           type: integer
+    RewriteAiJobRequest:
+      type: object
+      required: [documentId, selection, selectedText, instruction, baseVersionId, requestId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: '#/components/schemas/TextSelection'
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        instruction:
+          type: string
+        baseVersionId:
+          type: string
+        requestId:
+          type: string
+    SummarizeAiJobRequest:
+      type: object
+      required: [documentId, selection, selectedText, baseVersionId, requestId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: '#/components/schemas/TextSelection'
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        baseVersionId:
+          type: string
+        requestId:
+          type: string
+    TranslateAiJobRequest:
+      type: object
+      required: [documentId, selection, selectedText, targetLanguage, baseVersionId, requestId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: '#/components/schemas/TextSelection'
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        targetLanguage:
+          type: string
+        baseVersionId:
+          type: string
+        requestId:
+          type: string
+    AiJobResponse:
+      type: object
+      required: [jobId, statusUrl, status]
+      properties:
+        jobId:
+          type: string
+        statusUrl:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCEEDED, FAILED]
+        proposedText:
+          type: string
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+        baseVersionId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    SessionRequest:
+      type: object
+      required: [documentId]
+      properties:
+        documentId:
+          type: string
+    SessionResponse:
+      type: object
+      required: [sessionId, wsUrl, role]
+      properties:
+        sessionId:
+          type: string
+        wsUrl:
+          type: string
+        role:
+          type: string
+          enum: [owner, editor, viewer]
+    CreateExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [txt, json, pdf, docx]
+        requestId:
+          type: string
+    ReadyExportResponse:
+      type: object
+      required: [downloadUrl, expiresAt, content, contentType, fileName]
+      properties:
+        downloadUrl:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        content:
+          type: string
+        contentType:
+          type: string
+        fileName:
+          type: string
+    ExportQueuedResponse:
+      type: object
+      required: [jobId, statusUrl]
+      properties:
+        jobId:
+          type: string
+        statusUrl:
+          type: string
+    ExportStatusResponse:
+      type: object
+      required: [jobId, status, downloadUrl, expiresAt]
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCEEDED, FAILED]
+        downloadUrl:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+security:
+  - BearerAuth: []
 paths:
   /health:
     get:
+      security: []
       responses:
-        "200":
-          description: OK
+        '200':
+          description: Health check response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
   /auth/login:
     post:
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LoginRequest"
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        "200":
+        '200':
           description: Login response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LoginResponse"
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Invalid login payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /documents:
     post:
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateDocumentRequest"
+              $ref: '#/components/schemas/CreateDocumentRequest'
       responses:
-        "201":
-          description: Created
+        '201':
+          description: Created document
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateDocumentResponse"
-        "401":
-          description: Unauthorized
+                $ref: '#/components/schemas/CreateDocumentResponse'
+        '401':
+          description: Missing or invalid auth
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/ErrorResponse'
   /documents/{documentId}:
     get:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
@@ -205,16 +480,20 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          description: Document
+        '200':
+          description: Document snapshot
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetDocumentResponse"
+                $ref: '#/components/schemas/GetDocumentResponse'
+        '404':
+          description: Missing document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /documents/{documentId}/content:
     put:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
@@ -226,20 +505,28 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpdateContentRequest"
+              $ref: '#/components/schemas/UpdateContentRequest'
       responses:
-        "200":
-          description: Updated
-        "409":
-          description: Stale revision
+        '200':
+          description: Saved document content
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: '#/components/schemas/UpdateContentResponse'
+        '403':
+          description: Write access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Stale revision conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /documents/{documentId}/versions:
     get:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
@@ -247,35 +534,14 @@ paths:
           schema:
             type: string
       responses:
-        "200":
-          description: Versions
+        '200':
+          description: Version history page
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/VersionListResponse"
+                $ref: '#/components/schemas/VersionListResponse'
   /documents/{documentId}/revert:
     post:
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: documentId
-          required: true
-          schema:
-            type: string
-  /documents/{documentId}/permissions:
-    get:
-      security:
-        - BearerAuth: []
-      parameters:
-        - in: path
-          name: documentId
-          required: true
-          schema:
-            type: string
-    put:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
@@ -287,11 +553,51 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/PermissionUpdateRequest"
+              $ref: '#/components/schemas/RevertRequest'
+      responses:
+        '200':
+          description: Revert completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevertResponse'
+  /documents/{documentId}/permissions:
+    get:
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document members and roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListPermissionsResponse'
+    put:
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePermissionRequest'
+      responses:
+        '200':
+          description: Updated permission entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatePermissionResponse'
   /documents/{documentId}/permissions/{targetUserId}:
     delete:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
@@ -303,74 +609,180 @@ paths:
           required: true
           schema:
             type: string
+      responses:
+        '200':
+          description: Revoked permission entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokePermissionResponse'
   /documents/{documentId}/ai-policy:
     get:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
           required: true
           schema:
             type: string
+      responses:
+        '200':
+          description: Current AI policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiPolicyResponse'
     put:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
           required: true
           schema:
             type: string
-  /sessions:
-    post:
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SessionRequest"
+              $ref: '#/components/schemas/UpdateAiPolicyRequest'
+      responses:
+        '200':
+          description: Updated AI policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiPolicyResponse'
+  /sessions:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionRequest'
+      responses:
+        '200':
+          description: Realtime session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
   /ai/rewrite:
     post:
-      security:
-        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewriteAiJobRequest'
+      responses:
+        '202':
+          description: Rewrite job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
   /ai/summarize:
     post:
-      security:
-        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizeAiJobRequest'
+      responses:
+        '202':
+          description: Summarize job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
   /ai/translate:
     post:
-      security:
-        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateAiJobRequest'
+      responses:
+        '202':
+          description: Translate job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
   /ai/jobs/{jobId}:
     get:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: jobId
           required: true
           schema:
             type: string
+      responses:
+        '200':
+          description: Current AI job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobResponse'
   /documents/{documentId}/export:
     post:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: documentId
           required: true
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      responses:
+        '200':
+          description: Immediate export response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyExportResponse'
+        '202':
+          description: Queued export response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportQueuedResponse'
   /exports/{jobId}:
     get:
-      security:
-        - BearerAuth: []
       parameters:
         - in: path
           name: jobId
           required: true
           schema:
             type: string
+      responses:
+        '200':
+          description: Export job state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportStatusResponse'
+  /exports/{jobId}/download:
+    get:
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Export file download
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: string

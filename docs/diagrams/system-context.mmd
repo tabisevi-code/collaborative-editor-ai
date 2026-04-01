@@ -1,0 +1,16 @@
+flowchart LR
+    UserA[User A Browser]
+    UserB[User B Browser]
+    Frontend[Frontend React App]
+    Backend[Backend REST API]
+    Realtime[Realtime WebSocket Service]
+    SQLite[(SQLite Database)]
+    AI[OpenAI-Compatible AI Provider]
+
+    UserA --> Frontend
+    UserB --> Frontend
+    Frontend --> Backend
+    Frontend --> Realtime
+    Backend --> SQLite
+    Realtime --> SQLite
+    Backend --> AI
