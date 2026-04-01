@@ -1,119 +1,138 @@
+const inject = require("light-my-request");
+
 const { createApp } = require("../src/app");
 const { loadConfig } = require("../src/config");
 
-async function runSmoke(baseUrl) {
-  console.log(`[smoke] using BASE_URL=${baseUrl}`);
+async function requestJson(client, path, { method = "GET", headers = {}, body } = {}) {
+  const normalizedHeaders = { ...headers };
+  let payload;
 
-  const createRes = await fetch(`${baseUrl}/documents`, {
+  if (body !== undefined) {
+    payload = JSON.stringify(body);
+    if (!normalizedHeaders["Content-Type"] && !normalizedHeaders["content-type"]) {
+      normalizedHeaders["Content-Type"] = "application/json";
+    }
+  }
+
+  const result = await inject(client, {
+    method,
+    url: path,
+    headers: normalizedHeaders,
+    payload,
+  });
+
+  let json = {};
+  if (result.payload) {
+    try {
+      json = JSON.parse(result.payload);
+    } catch (_error) {
+      json = {};
+    }
+  }
+
+  return {
+    status: result.statusCode,
+    json,
+  };
+}
+
+async function login(client, userId) {
+  const result = await requestJson(client, "/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: { userId },
+  });
+
+  if (result.status !== 200) {
+    throw new Error(`[smoke] login failed: ${JSON.stringify(result.json)}`);
+  }
+
+  return result.json.accessToken;
+}
+
+async function runSmoke(client) {
+  console.log("[smoke] using in-process app");
+
+  const ownerToken = await login(client, "user_1");
+  const editorToken = await login(client, "user_2");
+
+  const createRes = await requestJson(client, "/documents", {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${ownerToken}`,
       "Content-Type": "application/json",
-      "x-user-id": "user_1",
     },
-    body: JSON.stringify({ title: "Smoke Test Doc", content: "Hello" }),
+    body: { title: "Smoke Test Doc", content: "Hello" },
   });
 
-  const createJson = await createRes.json();
   if (createRes.status !== 201) {
-    throw new Error(
-      `[smoke] expected 201, got ${createRes.status}: ${JSON.stringify(
-        createJson
-      )}`
-    );
+    throw new Error(`[smoke] create failed: ${JSON.stringify(createRes.json)}`);
   }
 
-  const requiredCreateFields = [
-    "documentId",
-    "title",
-    "ownerId",
-    "createdAt",
-    "updatedAt",
-    "currentVersionId",
-  ];
-  for (const f of requiredCreateFields) {
-    if (!(f in createJson)) throw new Error(`[smoke] missing field in POST: ${f}`);
-  }
+  const documentId = createRes.json.documentId;
 
-  const id = createJson.documentId;
-
-  const getRes = await fetch(`${baseUrl}/documents/${id}`, {
-    headers: { "x-user-id": "user_1" },
+  const permissionRes = await requestJson(client, `/documents/${documentId}/permissions`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${ownerToken}`,
+      "Content-Type": "application/json",
+    },
+    body: {
+      requestId: "smoke_perm_1",
+      targetUserId: "user_2",
+      role: "editor",
+    },
   });
-  const getJson = await getRes.json();
 
-  if (getRes.status !== 200) {
-    throw new Error(
-      `[smoke] expected 200, got ${getRes.status}: ${JSON.stringify(getJson)}`
-    );
+  if (permissionRes.status !== 200) {
+    throw new Error(`[smoke] permission update failed: ${JSON.stringify(permissionRes.json)}`);
   }
 
-  const requiredGetFields = [
-    "documentId",
-    "title",
-    "content",
-    "updatedAt",
-    "currentVersionId",
-    "role",
-    "revisionId",
-  ];
-  for (const f of requiredGetFields) {
-    if (!(f in getJson)) throw new Error(`[smoke] missing field in GET: ${f}`);
+  const updateRes = await requestJson(client, `/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${editorToken}`,
+      "Content-Type": "application/json",
+    },
+    body: {
+      requestId: "smoke_update_1",
+      content: "Hello from editor",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  if (updateRes.status !== 200) {
+    throw new Error(`[smoke] update failed: ${JSON.stringify(updateRes.json)}`);
+  }
+
+  const getRes = await requestJson(client, `/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  if (getRes.status !== 200 || getRes.json.content !== "Hello from editor") {
+    throw new Error(`[smoke] get failed: ${JSON.stringify(getRes.json)}`);
   }
 
   console.log("[smoke] PASS");
 }
 
-async function startEmbeddedServer() {
-  const config = loadConfig(process.env);
-  const app = createApp(config);
-
-  return new Promise((resolve, reject) => {
-    const server = app.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address !== "object") {
-        reject(new Error("failed to resolve embedded server address"));
-        return;
-      }
-
-      resolve({
-        server,
-        baseUrl: `http://127.0.0.1:${address.port}`,
-      });
-    });
-
-    server.on("error", reject);
-  });
-}
-
-async function stopServer(server) {
-  await new Promise((resolve, reject) => {
-    server.close((err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
 async function main() {
-  const externalBaseUrl = process.env.BASE_URL;
-  if (externalBaseUrl) {
-    await runSmoke(externalBaseUrl);
-    return;
-  }
+  const config = loadConfig({
+    ...process.env,
+    DATABASE_PATH: ":memory:",
+    ALLOW_DEBUG_USER_HEADER: "true",
+  });
+  const app = createApp(config);
+  const client = app;
 
-  const { server, baseUrl } = await startEmbeddedServer();
   try {
-    await runSmoke(baseUrl);
+    await runSmoke(client);
   } finally {
-    await stopServer(server);
+    app.locals.context.repository.close();
   }
 }
 
-main().catch((e) => {
-  console.error("[smoke] FAIL", e);
+main().catch((error) => {
+  console.error("[smoke] FAIL", error);
   process.exit(1);
 });

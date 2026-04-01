@@ -68,7 +68,14 @@ export function VersionHistoryPanel({
   async function handleRevert(versionId: string) {
     setRevertingId(versionId);
     try {
-      await apiClient.revertToVersion(documentId, versionId, userId);
+      await apiClient.revertToVersion(
+        documentId,
+        {
+          requestId: `req_revert_${Date.now()}_${versionId}`,
+          targetVersionId: versionId,
+        },
+        userId
+      );
       onRevert(versionId);
       onClose();
     } catch (error) {

@@ -1,195 +1,65 @@
 openapi: 3.0.3
 info:
-  title: Collaborative Editor AI - Backend PoC API
-  version: 0.1.0
+  title: Collaborative Editor AI Backend API
+  version: 1.0.0
 servers:
   - url: http://localhost:3000
-paths:
-  /health:
-    get:
-      summary: Health check
-      responses:
-        "200":
-          description: OK
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-  /documents:
-    post:
-      summary: Create a new document
-      parameters:
-        - $ref: "#/components/parameters/UserIdHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateDocumentRequest"
-      responses:
-        "201":
-          description: Created
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateDocumentResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "413":
-          $ref: "#/components/responses/PayloadTooLarge"
-  /documents/{documentId}:
-    get:
-      summary: Get a document by ID
-      parameters:
-        - name: documentId
-          in: path
-          required: true
-          schema:
-            type: string
-        - $ref: "#/components/parameters/UserIdHeader"
-      responses:
-        "200":
-          description: OK
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/GetDocumentResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
-  /ai/rewrite:
-    post:
-      summary: Create an async AI rewrite job
-      parameters:
-        - $ref: "#/components/parameters/UserIdHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AiRewriteRequest"
-      responses:
-        "202":
-          description: Accepted
-          headers:
-            XRequestId:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiJobResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-  /ai/summarize:
-    post:
-      summary: Create an async AI summarize job
-      parameters:
-        - $ref: "#/components/parameters/UserIdHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AiSummarizeRequest"
-      responses:
-        "202":
-          description: Accepted
-          headers:
-            XRequestId:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiJobResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-  /ai/translate:
-    post:
-      summary: Create an async AI translate job
-      parameters:
-        - $ref: "#/components/parameters/UserIdHeader"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AiTranslateRequest"
-      responses:
-        "202":
-          description: Accepted
-          headers:
-            XRequestId:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiJobResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-  /ai/jobs/{jobId}:
-    get:
-      summary: Get AI job status
-      parameters:
-        - name: jobId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-          headers:
-            XRequestId:
-              $ref: "#/components/headers/XRequestId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiJobResponse"
-        "404":
-          $ref: "#/components/responses/NotFound"
 components:
-  parameters:
-    UserIdHeader:
-      name: x-user-id
-      in: header
-      required: false
-      schema:
-        type: string
-      description: PoC user identity. Defaults to user_poc if omitted.
-  headers:
-    XRequestId:
-      description: Request correlation id
-      schema:
-        type: string
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
   schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+    LoginRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: string
+    LoginResponse:
+      type: object
+      required: [userId, displayName, globalRole, accessToken, expiresIn]
+      properties:
+        userId:
+          type: string
+        displayName:
+          type: string
+        globalRole:
+          type: string
+          enum: [user, admin]
+        accessToken:
+          type: string
+        expiresIn:
+          type: integer
     CreateDocumentRequest:
       type: object
       required: [title]
       properties:
         title:
           type: string
-          example: Untitled
         content:
           type: string
-          example: Initial text
     CreateDocumentResponse:
       type: object
       required: [documentId, title, ownerId, createdAt, updatedAt, currentVersionId]
       properties:
         documentId:
           type: string
-          example: doc_123
         title:
           type: string
         ownerId:
@@ -202,7 +72,6 @@ components:
           format: date-time
         currentVersionId:
           type: string
-          example: ver_1
     GetDocumentResponse:
       type: object
       required: [documentId, title, content, updatedAt, currentVersionId, role, revisionId]
@@ -223,102 +92,285 @@ components:
           enum: [owner, editor, viewer]
         revisionId:
           type: string
-          example: rev_1
-    Selection:
+    UpdateContentRequest:
+      type: object
+      required: [requestId, content, baseRevisionId]
+      properties:
+        requestId:
+          type: string
+        content:
+          type: string
+        baseRevisionId:
+          type: string
+    VersionListResponse:
+      type: object
+      properties:
+        documentId:
+          type: string
+        versions:
+          type: array
+          items:
+            type: object
+            properties:
+              versionId:
+                type: string
+              versionNumber:
+                type: integer
+              createdAt:
+                type: string
+              createdBy:
+                type: string
+              reason:
+                type: string
+        nextCursor:
+          type: string
+          nullable: true
+    PermissionUpdateRequest:
+      type: object
+      required: [requestId, targetUserId, role]
+      properties:
+        requestId:
+          type: string
+        targetUserId:
+          type: string
+        role:
+          type: string
+          enum: [viewer, editor]
+    SessionRequest:
+      type: object
+      required: [documentId]
+      properties:
+        documentId:
+          type: string
+    AiSelection:
       type: object
       required: [start, end]
       properties:
         start:
           type: integer
-          minimum: 0
         end:
           type: integer
-          minimum: 1
-    AiRequestBase:
-      type: object
-      required: [documentId, selection, selectedText, baseVersionId]
-      properties:
-        documentId:
-          type: string
-        selection:
-          $ref: "#/components/schemas/Selection"
-        selectedText:
-          type: string
-        contextBefore:
-          type: string
-        contextAfter:
-          type: string
-        instruction:
-          type: string
-        baseVersionId:
-          type: string
-    AiRewriteRequest:
-      allOf:
-        - $ref: "#/components/schemas/AiRequestBase"
-    AiSummarizeRequest:
-      allOf:
-        - $ref: "#/components/schemas/AiRequestBase"
-    AiTranslateRequest:
-      allOf:
-        - $ref: "#/components/schemas/AiRequestBase"
-        - type: object
-          required: [targetLanguage]
-          properties:
-            targetLanguage:
-              type: string
-    AiJobResponse:
-      type: object
-      required: [jobId, status, baseVersionId, createdAt, updatedAt]
-      properties:
-        jobId:
-          type: string
-        status:
-          type: string
-          enum: [PENDING, RUNNING, SUCCEEDED, FAILED]
-        proposedText:
-          type: string
-        baseVersionId:
-          type: string
-        errorCode:
-          type: string
-          enum: [AI_FAILED, AI_TIMEOUT, QUOTA_EXCEEDED, AI_ROLE_FORBIDDEN, AI_DISABLED]
-        errorMessage:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-    ErrorResponse:
-      type: object
-      properties:
-        error:
-          type: object
-          required: [code, message]
-          properties:
-            code:
-              type: string
-            message:
-              type: string
-            details:
-              type: object
-  responses:
-    BadRequest:
-      description: Invalid input
-      content:
-        application/json:
+paths:
+  /health:
+    get:
+      responses:
+        "200":
+          description: OK
+  /auth/login:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+  /documents:
+    post:
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDocumentRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateDocumentResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /documents/{documentId}:
+    get:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-    NotFound:
-      description: Not found
-      content:
-        application/json:
+            type: string
+      responses:
+        "200":
+          description: Document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetDocumentResponse"
+  /documents/{documentId}/content:
+    put:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
-    PayloadTooLarge:
-      description: Payload too large
-      content:
-        application/json:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateContentRequest"
+      responses:
+        "200":
+          description: Updated
+        "409":
+          description: Stale revision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /documents/{documentId}/versions:
+    get:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
           schema:
-            $ref: "#/components/schemas/ErrorResponse"
+            type: string
+      responses:
+        "200":
+          description: Versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionListResponse"
+  /documents/{documentId}/revert:
+    post:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+  /documents/{documentId}/permissions:
+    get:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+    put:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PermissionUpdateRequest"
+  /documents/{documentId}/permissions/{targetUserId}:
+    delete:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: targetUserId
+          required: true
+          schema:
+            type: string
+  /documents/{documentId}/ai-policy:
+    get:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+    put:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+  /sessions:
+    post:
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionRequest"
+  /ai/rewrite:
+    post:
+      security:
+        - BearerAuth: []
+  /ai/summarize:
+    post:
+      security:
+        - BearerAuth: []
+  /ai/translate:
+    post:
+      security:
+        - BearerAuth: []
+  /ai/jobs/{jobId}:
+    get:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+  /documents/{documentId}/export:
+    post:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+  /exports/{jobId}:
+    get:
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string

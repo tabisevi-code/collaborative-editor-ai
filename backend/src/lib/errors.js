@@ -6,6 +6,14 @@ function sendError(res, status, code, message, details) {
   return res.status(status).json(payload);
 }
 
+function createHttpError(status, code, message, details) {
+  const error = new Error(message);
+  error.status = status;
+  error.code = code;
+  error.details = details;
+  return error;
+}
+
 function notFoundHandler() {
   return (req, res) =>
     sendError(res, 404, "NOT_FOUND", "route not found", {
@@ -71,6 +79,7 @@ function errorHandler() {
 }
 
 module.exports = {
+  createHttpError,
   sendError,
   notFoundHandler,
   errorHandler,

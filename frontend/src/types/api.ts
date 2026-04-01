@@ -25,9 +25,11 @@ export interface GetDocumentResponse {
 export interface UpdateDocumentRequest {
   content: string;
   requestId: string;
+  baseRevisionId: string;
 }
 
 export interface UpdateDocumentResponse {
+  documentId: string;
   updatedAt: string;
   revisionId: string;
 }
@@ -46,22 +48,42 @@ export interface ListVersionsResponse {
 }
 
 export interface RevertToVersionRequest {
+  requestId: string;
   targetVersionId: string;
 }
 
 export interface RevertToVersionResponse {
   documentId: string;
-  newVersionId: string;
+  currentVersionId: string;
+  revertedFromVersionId: string;
   updatedAt: string;
 }
 
 export type AiAction = "rewrite" | "summarize" | "translate";
 
-export interface AiJobRequest {
+export interface TextSelection {
+  start: number;
+  end: number;
+}
+
+export interface RewriteAiJobRequest {
   documentId: string;
-  action: AiAction;
-  text: string;
-  targetLanguage?: string;
+  selection: TextSelection;
+  instruction: string;
+  requestId: string;
+}
+
+export interface SummarizeAiJobRequest {
+  documentId: string;
+  selection: TextSelection;
+  requestId: string;
+}
+
+export interface TranslateAiJobRequest {
+  documentId: string;
+  selection: TextSelection;
+  targetLanguage: string;
+  requestId: string;
 }
 
 export interface AiJobResponse {
@@ -70,6 +92,10 @@ export interface AiJobResponse {
   status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
   output?: string;
   errorMessage?: string;
+  errorCode?: string;
+  baseVersionId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ApiErrorShape {

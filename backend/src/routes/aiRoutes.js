@@ -1,105 +1,67 @@
-"use strict";
-
 const express = require("express");
 const { z } = require("zod");
 
-const { sendError } = require("../lib/errors");
-const { logError, logInfo } = require("../lib/logger");
 const { validateBody } = require("../lib/validate");
-const { getUserId } = require("../services/documentsService");
 
-const SelectionSchema = z
-  .object({
-    start: z.number().int().min(0, "selection.start must be >= 0"),
-    end: z.number().int().min(1, "selection.end must be >= 1"),
-  })
-  .refine((value) => value.end > value.start, {
-    message: "selection.end must be greater than selection.start",
-    path: ["end"],
-  });
+const SelectionSchema = z.object({
+  start: z.number().int().min(0),
+  end: z.number().int().positive(),
+});
 
-const AiRequestBaseSchema = z.object({
-  documentId: z.string().trim().min(1, "documentId is required"),
+const RewriteSchema = z.object({
+  documentId: z.string().trim().min(1),
   selection: SelectionSchema,
-  selectedText: z.string().min(1, "selectedText is required"),
-  contextBefore: z.string().optional(),
-  contextAfter: z.string().optional(),
-  instruction: z.string().trim().optional(),
-  baseVersionId: z.string().trim().min(1, "baseVersionId is required"),
+  instruction: z.string().trim().min(1).max(200),
+  requestId: z.string().trim().min(1).max(128),
 });
 
-const RewriteRequestSchema = AiRequestBaseSchema;
-const SummarizeRequestSchema = AiRequestBaseSchema;
-const TranslateRequestSchema = AiRequestBaseSchema.extend({
-  targetLanguage: z.string().trim().min(1, "targetLanguage is required"),
+const SummarizeSchema = z.object({
+  documentId: z.string().trim().min(1),
+  selection: SelectionSchema,
+  requestId: z.string().trim().min(1).max(128),
 });
 
-/**
- * This route layer intentionally stays thin. Auth, RBAC, quota, and document
- * mutation remain the main backend's responsibility, while this module only
- * forwards validated jobs to the isolated AI executor.
- */
-function aiRoutes(options = {}) {
-  if (!options.aiService) {
-    throw new Error("aiRoutes requires an aiService instance");
-  }
+const TranslateSchema = z.object({
+  documentId: z.string().trim().min(1),
+  selection: SelectionSchema,
+  targetLanguage: z.string().trim().min(1).max(64),
+  requestId: z.string().trim().min(1).max(128),
+});
 
+function aiRoutes({ aiService }) {
   const router = express.Router();
 
-  function scheduleAiExecution(jobId) {
-    setImmediate(() => {
-      void options.aiService.runAiJob(jobId).catch((error) => {
-        logError("ai_job_background_runner_failed", {
-          jobId,
-          error: {
-            message: error.message,
-            code: error.code,
-          },
-        });
-      });
-    });
-  }
-
-  function createHandler(action, schema) {
-    return [
-      validateBody(schema),
-      async (req, res, next) => {
-        try {
-          const userId = getUserId(req);
-          const job = await options.aiService.createAiJob({
-            ...req.validatedBody,
-            action,
-            requestId: req.requestId,
-            userId,
-          });
-
-          logInfo("ai_job_enqueued", {
-            jobId: job.jobId,
-            action,
-            requestId: req.requestId,
-          });
-          scheduleAiExecution(job.jobId);
-
-          return res.status(202).json(options.aiService.toAiJobResponse(job));
-        } catch (error) {
-          return next(error);
-        }
-      },
-    ];
-  }
-
-  router.post("/ai/rewrite", ...createHandler("rewrite", RewriteRequestSchema));
-  router.post("/ai/summarize", ...createHandler("summarize", SummarizeRequestSchema));
-  router.post("/ai/translate", ...createHandler("translate", TranslateRequestSchema));
-
-  router.get("/ai/jobs/:jobId", async (req, res, next) => {
+  router.post("/ai/rewrite", validateBody(RewriteSchema), (req, res, next) => {
     try {
-      const job = await options.aiService.getAiJobStatus(req.params.jobId);
-      if (!job) {
-        return sendError(res, 404, "NOT_FOUND", "AI job not found");
-      }
+      const response = aiService.createRewriteJob(req.auth, req.validatedBody);
+      return res.status(202).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
 
-      return res.status(200).json(options.aiService.toAiJobResponse(job));
+  router.post("/ai/summarize", validateBody(SummarizeSchema), (req, res, next) => {
+    try {
+      const response = aiService.createSummarizeJob(req.auth, req.validatedBody);
+      return res.status(202).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/ai/translate", validateBody(TranslateSchema), (req, res, next) => {
+    try {
+      const response = aiService.createTranslateJob(req.auth, req.validatedBody);
+      return res.status(202).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get("/ai/jobs/:jobId", (req, res, next) => {
+    try {
+      const response = aiService.getJob(req.auth, req.params.jobId);
+      return res.status(200).json(response);
     } catch (error) {
       return next(error);
     }

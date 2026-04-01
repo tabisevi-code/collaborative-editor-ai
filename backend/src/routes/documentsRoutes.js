@@ -1,86 +1,143 @@
 const express = require("express");
 const { z } = require("zod");
 
-const { sendError } = require("../lib/errors");
 const { validateBody } = require("../lib/validate");
-const {
-  getUserId,
-  computeRole,
-  createDocument,
-  fetchDocument,
-} = require("../services/documentsService");
-
-const DEFAULT_CONTENT_MAX_BYTES = 200 * 1024;
 
 const CreateDocumentSchema = z.object({
   title: z.string().trim().min(1, "title is required").max(120, "title too long"),
   content: z.string().optional().default(""),
 });
 
-function documentsRoutes(options = {}) {
+const UpdateContentSchema = z.object({
+  requestId: z.string().trim().min(1, "requestId is required").max(128),
+  content: z.string(),
+  baseRevisionId: z.string().trim().min(1, "baseRevisionId is required"),
+});
+
+const RevertSchema = z.object({
+  requestId: z.string().trim().min(1, "requestId is required").max(128),
+  targetVersionId: z.string().trim().min(1, "targetVersionId is required"),
+});
+
+const UpdatePermissionSchema = z.object({
+  requestId: z.string().trim().min(1, "requestId is required").max(128),
+  targetUserId: z.string().trim().min(1, "targetUserId is required").max(64),
+  role: z.enum(["viewer", "editor"]),
+});
+
+const UpdateAiPolicySchema = z.object({
+  aiEnabled: z.boolean(),
+  allowedRolesForAI: z.array(z.enum(["owner", "editor", "viewer"])).min(1),
+  dailyQuota: z.number().int().positive(),
+});
+
+function parsePositiveIntQuery(rawValue, fallbackValue) {
+  if (!rawValue) {
+    return fallbackValue;
+  }
+
+  const parsed = Number(rawValue);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallbackValue;
+}
+
+function documentsRoutes({ documentsService }) {
   const router = express.Router();
-  const contentMaxBytes = Number.isInteger(options.contentMaxBytes)
-    ? options.contentMaxBytes
-    : DEFAULT_CONTENT_MAX_BYTES;
 
-  /**
-   * POST /documents
-   * Response 201:
-   * { documentId, title, ownerId, createdAt, updatedAt, currentVersionId }
-   */
-  router.post("/documents", validateBody(CreateDocumentSchema), (req, res) => {
-    const userId = getUserId(req);
-
-    const { title, content } = req.validatedBody;
-
-    const bytes = Buffer.byteLength(content, "utf8");
-    if (bytes > contentMaxBytes) {
-      return sendError(
-        res,
-        413,
-        "PAYLOAD_TOO_LARGE",
-        "content exceeds limit",
-        { maxBytes: contentMaxBytes, actualBytes: bytes }
-      );
+  router.post("/documents", validateBody(CreateDocumentSchema), (req, res, next) => {
+    try {
+      const response = documentsService.createDocument(req.auth, req.validatedBody);
+      return res.status(201).json(response);
+    } catch (error) {
+      return next(error);
     }
-
-    const doc = createDocument({ title, content }, userId);
-
-    return res.status(201).json({
-      documentId: doc.documentId,
-      title: doc.title,
-      ownerId: doc.ownerId,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-      currentVersionId: doc.currentVersionId,
-    });
   });
 
-  /**
-   * GET /documents/:documentId
-   * Response 200:
-   * { documentId, title, content, updatedAt, currentVersionId, role, revisionId }
-   */
-  router.get("/documents/:documentId", (req, res) => {
-    const userId = getUserId(req);
-    const { documentId } = req.params;
-
-    const doc = fetchDocument(documentId);
-    if (!doc) {
-      return sendError(res, 404, "NOT_FOUND", "document not found");
+  router.get("/documents/:documentId", (req, res, next) => {
+    try {
+      const response = documentsService.getDocument(req.auth, req.params.documentId);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
     }
+  });
 
-    const role = computeRole(userId, doc);
+  router.put("/documents/:documentId/content", validateBody(UpdateContentSchema), (req, res, next) => {
+    try {
+      const response = documentsService.updateContent(req.auth, req.params.documentId, req.validatedBody);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
 
-    return res.status(200).json({
-      documentId: doc.documentId,
-      title: doc.title,
-      content: doc.content,
-      updatedAt: doc.updatedAt,
-      currentVersionId: doc.currentVersionId,
-      role,
-      revisionId: doc.revisionId,
-    });
+  router.get("/documents/:documentId/versions", (req, res, next) => {
+    try {
+      const response = documentsService.listVersions(req.auth, req.params.documentId, {
+        limit: parsePositiveIntQuery(req.query.limit, 50),
+        cursor: req.query.cursor || null,
+      });
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/documents/:documentId/revert", validateBody(RevertSchema), (req, res, next) => {
+    try {
+      const response = documentsService.revertDocument(req.auth, req.params.documentId, req.validatedBody);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get("/documents/:documentId/permissions", (req, res, next) => {
+    try {
+      const response = documentsService.listPermissions(req.auth, req.params.documentId);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.put("/documents/:documentId/permissions", validateBody(UpdatePermissionSchema), (req, res, next) => {
+    try {
+      const response = documentsService.updatePermission(req.auth, req.params.documentId, req.validatedBody);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.delete("/documents/:documentId/permissions/:targetUserId", (req, res, next) => {
+    try {
+      const response = documentsService.revokePermission(
+        req.auth,
+        req.params.documentId,
+        req.params.targetUserId
+      );
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.get("/documents/:documentId/ai-policy", (req, res, next) => {
+    try {
+      const response = documentsService.getAiPolicy(req.auth, req.params.documentId);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.put("/documents/:documentId/ai-policy", validateBody(UpdateAiPolicySchema), (req, res, next) => {
+    try {
+      const response = documentsService.updateAiPolicy(req.auth, req.params.documentId, req.validatedBody);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
   });
 
   return router;

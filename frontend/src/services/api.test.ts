@@ -2,8 +2,19 @@ import { createApiClient } from "./api";
 import { ApiError } from "../types/api";
 
 describe("api client", () => {
-  it("sends x-user-id on createDocument requests", async () => {
-    const fetchMock = vi.fn(async () => {
+  it("logs in and sends Authorization on createDocument requests", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/auth/login")) {
+        return new Response(
+          JSON.stringify({
+            userId: "user_1",
+            accessToken: "token_user_1",
+          }),
+          { status: 200 }
+        );
+      }
+
       return new Response(
         JSON.stringify({
           documentId: "doc_123",
@@ -21,10 +32,10 @@ describe("api client", () => {
 
     await client.createDocument({ title: "Test Doc", content: "Hello" }, "user_1");
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, options] = fetchMock.mock.calls[1] as [string, RequestInit];
     const headers = options.headers as Headers;
-    expect(headers.get("x-user-id")).toBe("user_1");
+    expect(headers.get("Authorization")).toBe("Bearer token_user_1");
   });
 
   it("parses successful getDocument responses", async () => {
@@ -45,7 +56,7 @@ describe("api client", () => {
 
     const client = createApiClient("http://localhost:3000", fetchMock as typeof fetch);
 
-    await expect(client.getDocument("doc_123", "user_1")).resolves.toMatchObject({
+    await expect(client.getDocument("doc_123")).resolves.toMatchObject({
       documentId: "doc_123",
       title: "Loaded Doc",
       role: "owner",
@@ -67,7 +78,7 @@ describe("api client", () => {
 
     const client = createApiClient("http://localhost:3000", fetchMock as typeof fetch);
 
-    await expect(client.createDocument({ title: "", content: "" }, "user_1")).rejects.toMatchObject({
+    await expect(client.createDocument({ title: "", content: "" })).rejects.toMatchObject({
       status: 400,
       code: "INVALID_INPUT",
       message: "title is required",

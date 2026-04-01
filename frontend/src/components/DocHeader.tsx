@@ -15,22 +15,28 @@ interface DocHeaderProps {
 }
 
 const SAVE_LABEL: Record<SaveState, string> = {
-  saved:   "All changes saved",
+  saved: "All changes saved",
   unsaved: "Unsaved changes",
-  saving:  "Saving…",
-  error:   "Save failed",
+  saving: "Saving…",
+  error: "Save failed",
 };
 
+/** The Google Docs-style SVG icon (blue/white document icon) */
 function DocsIcon() {
   return (
-    <svg width="28" height="28" viewBox="0 0 40 40">
-      <rect width="40" height="40" rx="4" fill="#4285f4"/>
-      <rect x="9"  y="9"  width="22" height="28" rx="2" fill="white" opacity="0.9"/>
-      <rect x="12" y="6"  width="13" height="4"  rx="1" fill="#a8c7fa"/>
-      <path d="M25 6l6 6h-6V6z" fill="#4285f4"/>
-      <rect x="13" y="16" width="14" height="1.5" rx="0.75" fill="#dadce0"/>
-      <rect x="13" y="20" width="14" height="1.5" rx="0.75" fill="#dadce0"/>
-      <rect x="13" y="24" width="9"  height="1.5" rx="0.75" fill="#dadce0"/>
+    <svg className="gdoc-icon" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="28" height="28" rx="3" fill="#4285f4"/>
+      <path d="M8 7h12v2H8V7zm0 4h12v2H8v-2zm0 4h8v2H8v-2z" fill="white"/>
+      <path d="M20 4H10L7 7v17h14V4z" fill="#a8c7fa"/>
+      <path d="M7 7h3V4L7 7z" fill="#1a73e8"/>
+      <path d="M10 8H8V7h2V8z" fill="#1a73e8" opacity="0.5"/>
+      <rect x="6" y="6" width="16" height="18" rx="1" fill="white" opacity="0.92"/>
+      <path d="M10 4v3H7" fill="none" stroke="#4285f4" strokeWidth="0.5"/>
+      <rect x="6" y="4" width="11" height="3" rx="0.5" fill="#a8c7fa"/>
+      <path d="M17 4l3 3h-3V4z" fill="#4285f4"/>
+      <rect x="8" y="10" width="12" height="1.2" rx="0.6" fill="#dadce0"/>
+      <rect x="8" y="13" width="12" height="1.2" rx="0.6" fill="#dadce0"/>
+      <rect x="8" y="16" width="8" height="1.2" rx="0.6" fill="#dadce0"/>
     </svg>
   );
 }
@@ -52,7 +58,7 @@ export function DocHeader({
 
   return (
     <>
-      {/* ── Top bar ─────────────────────────────────────────────────── */}
+      {/* ── Top bar ────────────────────────────────────────────────────── */}
       <header className="gdoc-topbar">
         <Link to="/" className="gdoc-topbar-logo" title="Back to Docs home">
           <DocsIcon />
@@ -87,7 +93,7 @@ export function DocHeader({
               className="btn btn-sm btn-ghost"
               onClick={onSave}
               disabled={!canSave}
-              title="Save"
+              title="Save document"
             >
               Save
             </button>
@@ -96,7 +102,7 @@ export function DocHeader({
             className="btn btn-sm btn-ai"
             onClick={onAiOpen}
             disabled={isReadOnly}
-            title={isReadOnly ? "AI unavailable in view-only mode" : "AI Assistant"}
+            title={isReadOnly ? "AI editing unavailable in view-only mode" : "AI Assistant"}
           >
             ✨ AI
           </button>
@@ -109,39 +115,36 @@ export function DocHeader({
         </div>
       </header>
 
-      {/* ── Menu bar ────────────────────────────────────────────────── */}
+      {/* ── Menu bar ───────────────────────────────────────────────────── */}
       <nav className="gdoc-menubar" aria-label="Document menu">
         {["File", "Edit", "View", "Insert", "Format", "Tools", "Extensions", "Help"].map((item) => (
-          <button key={item} className="gdoc-menu-item" title={`${item} (not yet implemented)`}>
+          <button
+            key={item}
+            className="gdoc-menu-item"
+            title={`${item} menu (not yet implemented)`}
+          >
             {item}
           </button>
         ))}
       </nav>
 
-      {/* ── Format toolbar ──────────────────────────────────────────── */}
+      {/* ── Format toolbar ─────────────────────────────────────────────── */}
       <div className="gdoc-toolbar" role="toolbar" aria-label="Formatting">
         {/* Undo / Redo / Print */}
-        <button className="gdoc-tb-btn" title="Undo (Ctrl+Z)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/>
-          </svg>
+        <button className="gdoc-tb-btn" title="Undo (Ctrl+Z)" onClick={() => document != null && window.history.go(-0)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
         </button>
         <button className="gdoc-tb-btn" title="Redo (Ctrl+Y)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/>
-          </svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 019-9 9 9 0 016 2.3l3 2.7"/></svg>
         </button>
         <button className="gdoc-tb-btn" title="Print (Ctrl+P)" onClick={() => window.print()}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 6 2 18 2 18 9"/>
-            <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
-            <rect x="6" y="14" width="12" height="8"/>
-          </svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
         </button>
 
         <div className="gdoc-toolbar-sep" />
 
-        <select className="gdoc-tb-select" defaultValue="100" title="Zoom" style={{ width: 68 }}>
+        {/* Zoom */}
+        <select className="gdoc-tb-select" defaultValue="100" title="Zoom level" style={{ width: 68 }}>
           {["50", "75", "90", "100", "125", "150", "200"].map((v) => (
             <option key={v} value={v}>{v}%</option>
           ))}
@@ -149,83 +152,74 @@ export function DocHeader({
 
         <div className="gdoc-toolbar-sep" />
 
-        <select className="gdoc-tb-select" defaultValue="normal" title="Paragraph style" style={{ width: 120 }}>
+        {/* Paragraph style */}
+        <select className="gdoc-tb-select" defaultValue="normal" title="Paragraph styles" style={{ width: 120 }}>
           {["Normal text", "Title", "Subtitle", "Heading 1", "Heading 2", "Heading 3"].map((s) => (
+            <option key={s} value={s.toLowerCase()}>{s}</option>
+          ))}
+        </select>
+
+        <div className="gdoc-toolbar-sep" />
+
+        {/* Font */}
+        <select className="gdoc-tb-select" defaultValue="Arial" title="Font" style={{ width: 100 }}>
+          {["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"].map((f) => (
+            <option key={f} value={f}>{f}</option>
+          ))}
+        </select>
+
+        {/* Font size */}
+        <button className="gdoc-tb-btn" disabled title="Decrease font size" style={{ fontSize: "11px" }}>−</button>
+        <select className="gdoc-tb-select" defaultValue="11" title="Font size" style={{ width: 52 }}>
+          {[8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48, 72].map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        <button className="gdoc-tb-btn" disabled title="Increase font size" style={{ fontSize: "11px" }}>+</button>
 
         <div className="gdoc-toolbar-sep" />
 
-        <select className="gdoc-tb-select" defaultValue="Arial" title="Font" style={{ width: 100 }}>
-          {["Arial", "Georgia", "Times New Roman", "Courier New", "Verdana"].map((f) => (
-            <option key={f}>{f}</option>
-          ))}
-        </select>
-
-        <button className="gdoc-tb-btn" disabled style={{ fontSize: 11 }} title="Decrease font size">−</button>
-        <select className="gdoc-tb-select" defaultValue="11" title="Font size" style={{ width: 52 }}>
-          {[8, 9, 10, 11, 12, 14, 16, 18, 24, 36, 48, 72].map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <button className="gdoc-tb-btn" disabled style={{ fontSize: 11 }} title="Increase font size">+</button>
+        {/* Text formatting */}
+        <button className="gdoc-tb-btn" disabled title="Bold (Ctrl+B)" style={{ fontWeight: 700 }}>B</button>
+        <button className="gdoc-tb-btn" disabled title="Italic (Ctrl+I)" style={{ fontStyle: "italic" }}>I</button>
+        <button className="gdoc-tb-btn" disabled title="Underline (Ctrl+U)" style={{ textDecoration: "underline" }}>U</button>
+        <button className="gdoc-tb-btn" disabled title="Strikethrough" style={{ textDecoration: "line-through", fontSize: "12px" }}>S</button>
 
         <div className="gdoc-toolbar-sep" />
 
-        <button className="gdoc-tb-btn" disabled title="Bold" style={{ fontWeight: 700 }}>B</button>
-        <button className="gdoc-tb-btn" disabled title="Italic" style={{ fontStyle: "italic" }}>I</button>
-        <button className="gdoc-tb-btn" disabled title="Underline" style={{ textDecoration: "underline" }}>U</button>
-        <button className="gdoc-tb-btn" disabled title="Strikethrough" style={{ textDecoration: "line-through", fontSize: 12 }}>S</button>
-
-        <div className="gdoc-toolbar-sep" />
-
+        {/* Alignment */}
         {[
-          { title: "Align left",   d: "M3 6h18M3 12h12M3 18h18" },
+          { title: "Align left", d: "M3 6h18M3 12h12M3 18h18" },
           { title: "Align center", d: "M3 6h18M6 12h12M3 18h18" },
-          { title: "Align right",  d: "M3 6h18M9 12h12M3 18h18" },
-          { title: "Justify",      d: "M3 6h18M3 12h18M3 18h18" },
+          { title: "Align right", d: "M3 6h18M9 12h12M3 18h18" },
+          { title: "Justify", d: "M3 6h18M3 12h18M3 18h18" },
         ].map(({ title, d }) => (
           <button key={title} className="gdoc-tb-btn" disabled title={title}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d={d} />
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d={d} /></svg>
           </button>
         ))}
 
         <div className="gdoc-toolbar-sep" />
 
+        {/* Lists */}
         <button className="gdoc-tb-btn" disabled title="Bulleted list">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
-            <circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/>
-            <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-            <circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
         </button>
         <button className="gdoc-tb-btn" disabled title="Numbered list">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/>
-            <path d="M4 6h1v4M4 10h2M4 14a1 1 0 011-1h1a1 1 0 010 2H4.5a1 1 0 000 2H6" strokeLinejoin="round"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4" strokeLinejoin="round"/><path d="M4 10h2" strokeLinejoin="round"/><path d="M4 14a1 1 0 011-1h1a1 1 0 010 2H4.5a1 1 0 000 2H6" strokeLinejoin="round"/></svg>
         </button>
 
         <div className="gdoc-toolbar-sep" />
 
+        {/* Insert link / image / comment */}
         <button className="gdoc-tb-btn" disabled title="Insert link">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
         </button>
         <button className="gdoc-tb-btn" disabled title="Insert image">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </button>
         <button className="gdoc-tb-btn" disabled title="Add comment">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         </button>
       </div>
     </>

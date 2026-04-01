@@ -30,6 +30,7 @@ function startServer() {
     logInfo("server_started", {
       port: config.port,
       url: `http://localhost:${config.port}`,
+      databasePath: config.databasePath,
     });
   });
 }

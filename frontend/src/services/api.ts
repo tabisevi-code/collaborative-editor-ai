@@ -1,13 +1,15 @@
 import {
   ApiError,
   type ApiErrorShape,
-  type AiJobRequest,
   type AiJobResponse,
   type CreateDocumentRequest,
   type CreateDocumentResponse,
   type GetDocumentResponse,
   type ListVersionsResponse,
   type RevertToVersionResponse,
+  type RewriteAiJobRequest,
+  type SummarizeAiJobRequest,
+  type TranslateAiJobRequest,
   type UpdateDocumentRequest,
   type UpdateDocumentResponse,
 } from "../types/api";
@@ -19,10 +21,22 @@ export interface ApiClient {
   getDocument(documentId: string, userId?: string): Promise<GetDocumentResponse>;
   updateDocument(documentId: string, payload: UpdateDocumentRequest, userId?: string): Promise<UpdateDocumentResponse>;
   listVersions(documentId: string, userId?: string): Promise<ListVersionsResponse>;
-  revertToVersion(documentId: string, targetVersionId: string, userId?: string): Promise<RevertToVersionResponse>;
-  requestAiJob(payload: AiJobRequest, userId?: string): Promise<AiJobResponse>;
+  revertToVersion(
+    documentId: string,
+    payload: { requestId: string; targetVersionId: string },
+    userId?: string
+  ): Promise<RevertToVersionResponse>;
+  requestRewriteJob(payload: RewriteAiJobRequest, userId?: string): Promise<AiJobResponse>;
+  requestSummarizeJob(payload: SummarizeAiJobRequest, userId?: string): Promise<AiJobResponse>;
+  requestTranslateJob(payload: TranslateAiJobRequest, userId?: string): Promise<AiJobResponse>;
   getAiJobStatus(jobId: string, userId?: string): Promise<AiJobResponse>;
 }
+
+interface LoginResponse {
+  accessToken: string;
+}
+
+const accessTokenCache = new Map<string, string>();
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
@@ -64,21 +78,51 @@ function toUnexpectedError(error: unknown): ApiError {
 export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): ApiClient {
   const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
 
+  async function login(userId: string): Promise<string> {
+    const normalizedUserId = userId.trim();
+    if (!normalizedUserId) {
+      throw new ApiError(401, "AUTH_REQUIRED", "user id is required");
+    }
+
+    const cachedToken = accessTokenCache.get(normalizedUserId);
+    if (cachedToken) {
+      return cachedToken;
+    }
+
+    const response = await fetchImpl(`${resolvedBaseUrl}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ userId: normalizedUserId }),
+    });
+
+    const payload = await parseJson(response);
+    if (!response.ok) {
+      throw toApiError(response.status, payload);
+    }
+
+    const accessToken = (payload as LoginResponse).accessToken;
+    accessTokenCache.set(normalizedUserId, accessToken);
+    return accessToken;
+  }
+
   async function request<T>(path: string, init: RequestInit, userId?: string): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set("Content-Type", "application/json");
 
-    if (userId?.trim()) {
-      headers.set("x-user-id", userId.trim());
-    }
-
-    console.info("[frontend-api] request", {
-      method: init.method || "GET",
-      url: `${resolvedBaseUrl}${path}`,
-      userId,
-    });
-
     try {
+      if (userId?.trim()) {
+        const accessToken = await login(userId);
+        headers.set("Authorization", `Bearer ${accessToken}`);
+      }
+
+      console.info("[frontend-api] request", {
+        method: init.method || "GET",
+        url: `${resolvedBaseUrl}${path}`,
+        userId,
+      });
+
       const response = await fetchImpl(`${resolvedBaseUrl}${path}`, {
         ...init,
         headers,
@@ -134,20 +178,73 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
       );
     },
 
-    revertToVersion(documentId, targetVersionId, userId) {
+    revertToVersion(documentId, payload, userId) {
       return request<RevertToVersionResponse>(
         `/documents/${encodeURIComponent(documentId)}/revert`,
-        { method: "POST", body: JSON.stringify({ targetVersionId }) },
+        { method: "POST", body: JSON.stringify(payload) },
         userId
       );
     },
 
-    requestAiJob(payload, userId) {
-      return request<AiJobResponse>("/ai/jobs", { method: "POST", body: JSON.stringify(payload) }, userId);
+    async requestRewriteJob(payload, userId) {
+      const response = await request<{ jobId: string; statusUrl: string }>(
+        "/ai/rewrite",
+        { method: "POST", body: JSON.stringify(payload) },
+        userId
+      );
+      return {
+        ...response,
+        status: "PENDING",
+      };
     },
 
-    getAiJobStatus(jobId, userId) {
-      return request<AiJobResponse>(`/ai/jobs/${encodeURIComponent(jobId)}`, { method: "GET" }, userId);
+    async requestSummarizeJob(payload, userId) {
+      const response = await request<{ jobId: string; statusUrl: string }>(
+        "/ai/summarize",
+        { method: "POST", body: JSON.stringify(payload) },
+        userId
+      );
+      return {
+        ...response,
+        status: "PENDING",
+      };
+    },
+
+    async requestTranslateJob(payload, userId) {
+      const response = await request<{ jobId: string; statusUrl: string }>(
+        "/ai/translate",
+        { method: "POST", body: JSON.stringify(payload) },
+        userId
+      );
+      return {
+        ...response,
+        status: "PENDING",
+      };
+    },
+
+    async getAiJobStatus(jobId, userId) {
+      const payload = await request<{
+        jobId: string;
+        status: AiJobResponse["status"];
+        result?: { proposedText?: string };
+        errorCode?: string;
+        errorMessage?: string;
+        baseVersionId?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      }>(`/ai/jobs/${encodeURIComponent(jobId)}`, { method: "GET" }, userId);
+
+      return {
+        jobId: payload.jobId,
+        statusUrl: `/ai/jobs/${payload.jobId}`,
+        status: payload.status,
+        output: payload.result?.proposedText,
+        errorCode: payload.errorCode,
+        errorMessage: payload.errorMessage,
+        baseVersionId: payload.baseVersionId,
+        createdAt: payload.createdAt,
+        updatedAt: payload.updatedAt,
+      };
     },
   };
 }

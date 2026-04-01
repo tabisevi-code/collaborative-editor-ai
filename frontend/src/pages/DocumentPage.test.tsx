@@ -5,6 +5,21 @@ import type { ApiClient } from "../services/api";
 import { ApiError, type GetDocumentResponse } from "../types/api";
 import { DocumentPage } from "./DocumentPage";
 
+function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
+  return {
+    createDocument: vi.fn(),
+    getDocument: vi.fn(),
+    updateDocument: vi.fn(),
+    listVersions: vi.fn(),
+    revertToVersion: vi.fn(),
+    requestRewriteJob: vi.fn(),
+    requestSummarizeJob: vi.fn(),
+    requestTranslateJob: vi.fn(),
+    getAiJobStatus: vi.fn(),
+    ...overrides,
+  };
+}
+
 function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
   return render(
     <MemoryRouter
@@ -20,8 +35,7 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
 
 describe("DocumentPage", () => {
   it("renders viewer mode as read-only", async () => {
-    const apiClient: ApiClient = {
-      createDocument: vi.fn(),
+    const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => ({
         documentId: "doc_123",
         title: "Shared Doc",
@@ -31,20 +45,19 @@ describe("DocumentPage", () => {
         role: "viewer",
         revisionId: "rev_1",
       }) satisfies GetDocumentResponse),
-    };
+    });
 
     renderDocumentPage(apiClient, "user_2");
 
     await waitFor(() => {
-      expect(screen.getByText("View-only mode")).toBeInTheDocument();
+      expect(screen.getByText(/view-only mode/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Document Content")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText("Document content")).toHaveAttribute("readonly");
   });
 
   it("shows an unsaved draft hint for editable roles", async () => {
-    const apiClient: ApiClient = {
-      createDocument: vi.fn(),
+    const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => ({
         documentId: "doc_123",
         title: "Editable Doc",
@@ -54,25 +67,24 @@ describe("DocumentPage", () => {
         role: "owner",
         revisionId: "rev_1",
       }) satisfies GetDocumentResponse),
-    };
+    });
 
     renderDocumentPage(apiClient);
 
-    const editor = await screen.findByLabelText("Document Content");
+    const editor = await screen.findByLabelText("Document content");
     fireEvent.change(editor, { target: { value: "Changed locally" } });
 
     await waitFor(() => {
-      expect(screen.getByText("Unsaved local draft")).toBeInTheDocument();
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     });
   });
 
   it("shows a document not found banner for 404 errors", async () => {
-    const apiClient: ApiClient = {
-      createDocument: vi.fn(),
+    const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => {
         throw new ApiError(404, "NOT_FOUND", "document not found");
       }),
-    };
+    });
 
     renderDocumentPage(apiClient);
 
@@ -82,17 +94,16 @@ describe("DocumentPage", () => {
   });
 
   it("shows a backend unavailable banner for network failures", async () => {
-    const apiClient: ApiClient = {
-      createDocument: vi.fn(),
+    const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => {
         throw new ApiError(0, "NETWORK_ERROR", "backend unavailable");
       }),
-    };
+    });
 
     renderDocumentPage(apiClient);
 
     await waitFor(() => {
-      expect(screen.getByText(/backend is unavailable/i)).toBeInTheDocument();
+      expect(screen.getByText(/backend unavailable/i)).toBeInTheDocument();
     });
   });
 });

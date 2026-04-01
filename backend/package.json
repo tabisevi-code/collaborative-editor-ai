@@ -17,8 +17,13 @@
     "smoke": "npm run test:smoke"
   },
   "dependencies": {
+    "better-sqlite3": "^12.8.0",
     "cors": "2.8.5",
     "express": "5.1.0",
+    "supertest": "^7.2.2",
     "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "light-my-request": "^6.6.0"
   }
 }

@@ -4,6 +4,21 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { ApiClient } from "../services/api";
 import { HomePage } from "./HomePage";
 
+function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
+  return {
+    createDocument: vi.fn(),
+    getDocument: vi.fn(),
+    updateDocument: vi.fn(),
+    listVersions: vi.fn(),
+    revertToVersion: vi.fn(),
+    requestRewriteJob: vi.fn(),
+    requestSummarizeJob: vi.fn(),
+    requestTranslateJob: vi.fn(),
+    getAiJobStatus: vi.fn(),
+    ...overrides,
+  };
+}
+
 function renderHomePage(apiClient: ApiClient) {
   return render(
     <MemoryRouter
@@ -20,7 +35,7 @@ function renderHomePage(apiClient: ApiClient) {
 
 describe("HomePage", () => {
   it("navigates to the document route after a successful create", async () => {
-    const apiClient: ApiClient = {
+    const apiClient = createApiClientMock({
       createDocument: vi.fn(async () => ({
         documentId: "doc_created",
         title: "My Doc",
@@ -29,14 +44,13 @@ describe("HomePage", () => {
         updatedAt: "2026-04-02T00:00:00.000Z",
         currentVersionId: "ver_1",
       })),
-      getDocument: vi.fn(),
-    };
+    });
 
     renderHomePage(apiClient);
 
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "My Doc" } });
-    fireEvent.change(screen.getByLabelText("Initial Content"), { target: { value: "Hello" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Document" }));
+    fireEvent.change(screen.getByLabelText("Initial content"), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: /Create Document/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Document Route")).toBeInTheDocument();
@@ -44,15 +58,12 @@ describe("HomePage", () => {
   });
 
   it("navigates to the open document route when a document id is submitted", async () => {
-    const apiClient: ApiClient = {
-      createDocument: vi.fn(),
-      getDocument: vi.fn(),
-    };
+    const apiClient = createApiClientMock();
 
     renderHomePage(apiClient);
 
     fireEvent.change(screen.getByLabelText("Document ID"), { target: { value: "doc_123" } });
-    fireEvent.click(screen.getByRole("button", { name: "Open Document" }));
+    fireEvent.click(screen.getByRole("button", { name: /Open/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Document Route")).toBeInTheDocument();

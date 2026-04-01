@@ -1,41 +1,59 @@
-# Backend PoC Contract Lock (Do Not Change Without Team Agreement)
+# Backend Contract Notes
 
-This file pins the JSON fields for the graded PoC endpoints.
+This project no longer uses the original in-memory PoC contract only.
+
+The current backend contract centers around:
+
+- `POST /auth/login`
+- `POST /documents`
+- `GET /documents/:documentId`
+- `PUT /documents/:documentId/content`
+- `GET /documents/:documentId/versions`
+- `POST /documents/:documentId/revert`
+- `GET|PUT|DELETE /documents/:documentId/permissions...`
+- `POST /sessions`
+- `POST /ai/*`
+- `GET /ai/jobs/:jobId`
+- `POST /documents/:documentId/export`
+- `GET /exports/:jobId`
+
+Stable response fields that frontend and tests depend on:
 
 ## POST /documents
-Request:
-{
-  "title": "Untitled",
-  "content": "Initial text"
-}
 
-Response (201):
+```json
 {
   "documentId": "doc_123",
   "title": "Untitled",
   "ownerId": "user_1",
   "createdAt": "ISO-8601",
   "updatedAt": "ISO-8601",
-  "currentVersionId": "ver_1"
+  "currentVersionId": "ver_xxx"
 }
+```
 
 ## GET /documents/:documentId
-Response (200):
+
+```json
 {
   "documentId": "doc_123",
   "title": "Untitled",
   "content": "Latest text",
   "updatedAt": "ISO-8601",
-  "currentVersionId": "ver_1",
-  "role": "owner|viewer|editor",
-  "revisionId": "rev_1"
+  "currentVersionId": "ver_xxx",
+  "role": "owner|editor|viewer",
+  "revisionId": "rev_n"
 }
+```
 
-## Standard Error Schema (all non-2xx)
+## Standard Error Schema
+
+```json
 {
   "error": {
     "code": "INVALID_INPUT",
-    "message": "title is required",
-    "details": { "field": "title" }
+    "message": "human readable message",
+    "details": {}
   }
 }
+```

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import type { AiAction, AiJobResponse } from "../types/api";
+import type { AiAction, AiJobResponse, TextSelection } from "../types/api";
 import type { AiService } from "../services/ai";
 import { ApiError } from "../types/api";
 
 interface AiPanelProps {
   documentId: string;
+  selection: TextSelection;
   selectedText: string;
   aiService: AiService;
   onApply(text: string): void;
@@ -30,7 +31,7 @@ function mapAiError(error: unknown): string {
   return "Unexpected error. Please try again.";
 }
 
-export function AiPanel({ documentId, selectedText, aiService, onApply, onClose }: AiPanelProps) {
+export function AiPanel({ documentId, selection, selectedText, aiService, onApply, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
   const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error">("idle");
@@ -48,11 +49,11 @@ export function AiPanel({ documentId, selectedText, aiService, onApply, onClose 
       let job: AiJobResponse;
 
       if (action === "rewrite") {
-        job = await aiService.requestRewrite(documentId, selectedText);
+        job = await aiService.requestRewrite(documentId, selection);
       } else if (action === "summarize") {
-        job = await aiService.requestSummarize(documentId, selectedText);
+        job = await aiService.requestSummarize(documentId, selection);
       } else {
-        job = await aiService.requestTranslate(documentId, selectedText, targetLanguage);
+        job = await aiService.requestTranslate(documentId, selection, targetLanguage);
       }
 
       if (job.status === "SUCCEEDED") {

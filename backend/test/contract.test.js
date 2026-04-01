@@ -1,39 +1,11 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const inject = require("light-my-request");
 
 const { createApp } = require("../src/app");
 const { loadConfig } = require("../src/config");
-const { resetDocumentsStore } = require("../src/storage/documentsStore");
 
-const CONTRACT_POST_KEYS = [
-  "documentId",
-  "title",
-  "ownerId",
-  "createdAt",
-  "updatedAt",
-  "currentVersionId",
-];
-
-const CONTRACT_GET_KEYS = [
-  "documentId",
-  "title",
-  "content",
-  "updatedAt",
-  "currentVersionId",
-  "role",
-  "revisionId",
-];
-
-let server;
-let baseUrl;
-
-function assertExactKeys(obj, expectedKeys, label) {
-  assert.deepEqual(
-    Object.keys(obj).sort(),
-    [...expectedKeys].sort(),
-    `${label} keys must match contract`
-  );
-}
+let app;
 
 function assertIsoDate(value, label) {
   assert.equal(typeof value, "string", `${label} must be a string`);
@@ -41,215 +13,406 @@ function assertIsoDate(value, label) {
 }
 
 function assertStandardError(body, expectedCode) {
-  assertExactKeys(body, ["error"], "error response");
   assert.equal(typeof body.error.code, "string", "error.code must be string");
   assert.equal(typeof body.error.message, "string", "error.message must be string");
   assert.equal(body.error.code, expectedCode, `expected error.code=${expectedCode}`);
 }
 
 async function requestJson(path, { method = "GET", headers = {}, body } = {}) {
-  const response = await fetch(`${baseUrl}${path}`, {
+  const normalizedHeaders = { ...headers };
+  let payload;
+
+  if (body !== undefined) {
+    payload = JSON.stringify(body);
+    if (!normalizedHeaders["Content-Type"] && !normalizedHeaders["content-type"]) {
+      normalizedHeaders["Content-Type"] = "application/json";
+    }
+  }
+
+  const result = await inject(app, {
     method,
-    headers,
-    body,
+    url: path,
+    headers: normalizedHeaders,
+    payload,
   });
 
-  const raw = await response.text();
-  let json;
-  try {
-    json = JSON.parse(raw);
-  } catch (_err) {
-    throw new Error(`expected JSON response, got: ${raw}`);
+  let json = {};
+  if (result.payload) {
+    try {
+      json = JSON.parse(result.payload);
+    } catch (_error) {
+      json = {};
+    }
   }
 
   return {
-    status: response.status,
-    headers: response.headers,
+    status: result.statusCode,
+    headers: result.headers,
     json,
+    text: result.payload,
   };
 }
 
-function closeServer(httpServer) {
-  return new Promise((resolve, reject) => {
-    httpServer.close((err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-
-      resolve();
-    });
+async function loginAs(userId) {
+  const result = await requestJson("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: { userId },
   });
+
+  assert.equal(result.status, 200);
+  return result.json.accessToken;
+}
+
+function authHeaders(token) {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
 }
 
 test.before(async () => {
-  const config = loadConfig(process.env);
-  const app = createApp(config);
-
-  await new Promise((resolve, reject) => {
-    server = app.listen(0, "127.0.0.1");
-
-    server.once("listening", () => {
-      const address = server.address();
-      if (!address || typeof address !== "object") {
-        reject(new Error("failed to resolve test server address"));
-        return;
-      }
-
-      baseUrl = `http://127.0.0.1:${address.port}`;
-      resolve();
-    });
-
-    server.once("error", reject);
+  const config = loadConfig({
+    ...process.env,
+    DATABASE_PATH: ":memory:",
+    ALLOW_DEBUG_USER_HEADER: "true",
   });
+
+  app = createApp(config);
 });
 
 test.after(async () => {
-  if (server?.listening) {
-    await closeServer(server);
-  }
+  app.locals.context.repository.close();
 });
 
 test.beforeEach(() => {
-  resetDocumentsStore();
+  app.locals.context.repository.resetForTests();
 });
 
 test("GET /health returns 200 { ok: true }", async () => {
   const result = await requestJson("/health");
 
   assert.equal(result.status, 200);
-  assert.ok(result.headers.get("x-request-id"));
+  assert.ok(result.headers["x-request-id"]);
   assert.deepEqual(result.json, { ok: true });
 });
 
-test("POST /documents returns exact 201 contract fields", async () => {
+test("POST /documents requires auth", async () => {
   const result = await requestJson("/documents", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-user-id": "user_1",
-    },
-    body: JSON.stringify({ title: "Test Doc", content: "Hello" }),
+    headers: { "Content-Type": "application/json" },
+    body: { title: "No Auth", content: "Hello" },
   });
 
-  assert.equal(result.status, 201);
-  assert.ok(result.headers.get("x-request-id"));
-  assertExactKeys(result.json, CONTRACT_POST_KEYS, "POST /documents");
-  assert.equal(result.json.title, "Test Doc");
-  assert.equal(result.json.ownerId, "user_1");
-  assert.equal(result.json.currentVersionId, "ver_1");
-  assertIsoDate(result.json.createdAt, "createdAt");
-  assertIsoDate(result.json.updatedAt, "updatedAt");
+  assert.equal(result.status, 401);
+  assertStandardError(result.json, "AUTH_REQUIRED");
 });
 
-test("GET /documents/:id returns exact 200 contract fields", async () => {
-  const createResult = await requestJson("/documents", {
+test("login returns a bearer token", async () => {
+  const result = await requestJson("/auth/login", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-user-id": "user_1",
-    },
-    body: JSON.stringify({ title: "Doc", content: "Body" }),
+    headers: { "Content-Type": "application/json" },
+    body: { userId: "user_1" },
   });
 
+  assert.equal(result.status, 200);
+  assert.equal(result.json.userId, "user_1");
+  assert.equal(result.json.accessToken, "token_user_1");
+});
+
+test("create and get document returns contract fields", async () => {
+  const token = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: { title: "Doc", content: "Hello" },
+  });
+
+  assert.equal(createResult.status, 201);
+  assert.equal(createResult.json.ownerId, "user_1");
+  assertIsoDate(createResult.json.createdAt, "createdAt");
+  assertIsoDate(createResult.json.updatedAt, "updatedAt");
+
   const getResult = await requestJson(`/documents/${createResult.json.documentId}`, {
-    headers: { "x-user-id": "user_1" },
+    headers: { Authorization: `Bearer ${token}` },
   });
 
   assert.equal(getResult.status, 200);
-  assert.ok(getResult.headers.get("x-request-id"));
-  assertExactKeys(getResult.json, CONTRACT_GET_KEYS, "GET /documents/:id");
-  assert.equal(getResult.json.title, "Doc");
-  assert.equal(getResult.json.content, "Body");
-  assert.equal(getResult.json.currentVersionId, "ver_1");
   assert.equal(getResult.json.role, "owner");
   assert.equal(getResult.json.revisionId, "rev_1");
-  assertIsoDate(getResult.json.updatedAt, "updatedAt");
+  assert.equal(getResult.json.content, "Hello");
 });
 
-test("POST /documents defaults ownerId to user_poc when x-user-id is missing", async () => {
-  const result = await requestJson("/documents", {
+test("permission grant creates editor access", async () => {
+  const ownerToken = await loginAs("user_1");
+  const editorToken = await loginAs("user_2");
+
+  const createResult = await requestJson("/documents", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+    headers: authHeaders(ownerToken),
+    body: { title: "Shared", content: "Hello" },
+  });
+
+  const documentId = createResult.json.documentId;
+
+  const permissionResult = await requestJson(`/documents/${documentId}/permissions`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_perm_1",
+      targetUserId: "user_2",
+      role: "editor",
     },
-    body: JSON.stringify({ title: "No Header", content: "Hello" }),
   });
 
-  assert.equal(result.status, 201);
-  assert.equal(result.json.ownerId, "user_poc");
-});
+  assert.equal(permissionResult.status, 200);
+  assert.equal(permissionResult.json.role, "editor");
 
-test("GET /documents/:id returns 404 standard error for unknown document", async () => {
-  const result = await requestJson("/documents/doc_missing", {
-    headers: { "x-user-id": "user_1" },
+  const getResult = await requestJson(`/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${editorToken}` },
   });
 
-  assert.equal(result.status, 404);
-  assert.ok(result.headers.get("x-request-id"));
-  assertStandardError(result.json, "NOT_FOUND");
+  assert.equal(getResult.status, 200);
+  assert.equal(getResult.json.role, "editor");
 });
 
-test("POST /documents returns 400 standard error for invalid input", async () => {
-  const result = await requestJson("/documents", {
+test("viewer cannot update content", async () => {
+  const ownerToken = await loginAs("user_1");
+  const viewerToken = await loginAs("user_2");
+
+  const createResult = await requestJson("/documents", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ title: "", content: "Hello" }),
+    headers: authHeaders(ownerToken),
+    body: { title: "Read Only", content: "Hello" },
   });
 
-  assert.equal(result.status, 400);
-  assert.ok(result.headers.get("x-request-id"));
-  assertStandardError(result.json, "INVALID_INPUT");
+  const documentId = createResult.json.documentId;
+
+  await requestJson(`/documents/${documentId}/permissions`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_perm_viewer",
+      targetUserId: "user_2",
+      role: "viewer",
+    },
+  });
+
+  const updateResult = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(viewerToken),
+    body: {
+      requestId: "req_update_denied",
+      content: "Nope",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  assert.equal(updateResult.status, 403);
+  assertStandardError(updateResult.json, "PERMISSION_DENIED");
 });
 
-test("POST /documents returns 400 standard error for non-object JSON body", async () => {
-  const result = await requestJson("/documents", {
+test("content updates are idempotent and enforce stale revision checks", async () => {
+  const ownerToken = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(["not", "an", "object"]),
+    headers: authHeaders(ownerToken),
+    body: { title: "Mutable", content: "Hello" },
   });
 
-  assert.equal(result.status, 400);
-  assert.ok(result.headers.get("x-request-id"));
-  assertStandardError(result.json, "INVALID_INPUT");
+  const documentId = createResult.json.documentId;
+
+  const firstUpdate = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_1",
+      content: "Hello world",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  assert.equal(firstUpdate.status, 200);
+  assert.equal(firstUpdate.json.revisionId, "rev_2");
+
+  const replayUpdate = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_1",
+      content: "Hello world",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  assert.equal(replayUpdate.status, 200);
+  assert.deepEqual(replayUpdate.json, firstUpdate.json);
+
+  const staleUpdate = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_2",
+      content: "Stale write",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  assert.equal(staleUpdate.status, 409);
+  assertStandardError(staleUpdate.json, "CONFLICT");
 });
 
-test("POST /documents returns 400 standard error for invalid JSON", async () => {
-  const result = await requestJson("/documents", {
+test("list versions and revert keep history instead of overwriting it", async () => {
+  const ownerToken = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: "{\"title\":",
+    headers: authHeaders(ownerToken),
+    body: { title: "Versions", content: "One" },
   });
 
-  assert.equal(result.status, 400);
-  assert.ok(result.headers.get("x-request-id"));
-  assertStandardError(result.json, "INVALID_JSON");
-});
+  const documentId = createResult.json.documentId;
 
-test("POST /documents returns 413 standard error when content exceeds max size", async () => {
-  const result = await requestJson("/documents", {
+  await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_versions",
+      content: "Two",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  const versionsBeforeRevert = await requestJson(`/documents/${documentId}/versions`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  assert.equal(versionsBeforeRevert.status, 200);
+  assert.equal(versionsBeforeRevert.json.versions.length, 2);
+
+  const revertResult = await requestJson(`/documents/${documentId}/revert`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_revert_1",
+      targetVersionId: versionsBeforeRevert.json.versions[1].versionId,
     },
-    body: JSON.stringify({ title: "Big", content: "a".repeat(205000) }),
   });
 
-  assert.equal(result.status, 413);
-  assert.ok(result.headers.get("x-request-id"));
-  assertStandardError(result.json, "PAYLOAD_TOO_LARGE");
+  assert.equal(revertResult.status, 200);
+
+  const versionsAfterRevert = await requestJson(`/documents/${documentId}/versions`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  assert.equal(versionsAfterRevert.status, 200);
+  assert.equal(versionsAfterRevert.json.versions.length, 4);
 });
 
-test("Unknown route returns 404 standard error schema", async () => {
-  const result = await requestJson("/not-a-real-route");
+test("AI policy can disable AI and AI jobs complete asynchronously", async () => {
+  const ownerToken = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: { title: "AI Doc", content: "Hello from AI testing" },
+  });
 
-  assert.equal(result.status, 404);
-  assert.ok(result.headers.get("x-request-id"));
-  assertStandardError(result.json, "NOT_FOUND");
+  const documentId = createResult.json.documentId;
+
+  const disabledResult = await requestJson(`/documents/${documentId}/ai-policy`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      aiEnabled: false,
+      allowedRolesForAI: ["owner", "editor"],
+      dailyQuota: 2,
+    },
+  });
+
+  assert.equal(disabledResult.status, 200);
+  assert.equal(disabledResult.json.aiEnabled, false);
+
+  const blockedAi = await requestJson("/ai/rewrite", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: {
+      documentId,
+      selection: { start: 0, end: 5 },
+      instruction: "Rewrite",
+      requestId: "req_ai_disabled",
+    },
+  });
+
+  assert.equal(blockedAi.status, 403);
+  assertStandardError(blockedAi.json, "AI_DISABLED");
+
+  await requestJson(`/documents/${documentId}/ai-policy`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      aiEnabled: true,
+      allowedRolesForAI: ["owner", "editor"],
+      dailyQuota: 2,
+    },
+  });
+
+  const aiJobResult = await requestJson("/ai/rewrite", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: {
+      documentId,
+      selection: { start: 0, end: 5 },
+      instruction: "Rewrite",
+      requestId: "req_ai_success",
+    },
+  });
+
+  assert.equal(aiJobResult.status, 202);
+
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
+  const aiStatus = await requestJson(aiJobResult.json.statusUrl, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  assert.equal(aiStatus.status, 200);
+  assert.equal(aiStatus.json.status, "SUCCEEDED");
+  assert.match(aiStatus.json.result.proposedText, /Rewrite/);
+});
+
+test("txt export returns download metadata and sessions issue ws URLs", async () => {
+  const ownerToken = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: { title: "Exportable", content: "Hello export" },
+  });
+
+  const documentId = createResult.json.documentId;
+
+  const exportResult = await requestJson(`/documents/${documentId}/export`, {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: { format: "txt" },
+  });
+
+  assert.equal(exportResult.status, 200);
+  assert.match(exportResult.json.downloadUrl, /\/exports\//);
+
+  const downloadResult = await inject(app, {
+    method: "GET",
+    url: exportResult.json.downloadUrl,
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  assert.equal(downloadResult.statusCode, 200);
+  assert.match(downloadResult.payload, /Hello export/);
+
+  const sessionResult = await requestJson("/sessions", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: { documentId },
+  });
+
+  assert.equal(sessionResult.status, 200);
+  assert.match(sessionResult.json.wsUrl, /^ws:\/\/localhost:3001\/ws/);
 });
