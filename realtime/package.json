@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node src/server.js",
     "start": "node src/server.js",
-    "test": "node --test --test-force-exit"
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
