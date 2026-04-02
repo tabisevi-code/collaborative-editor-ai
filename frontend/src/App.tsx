@@ -5,8 +5,9 @@ import { AppBar } from "./components/AppBar";
 import { createApiClient } from "./services/api";
 import { DocumentPage } from "./pages/DocumentPage";
 import { HomePage } from "./pages/HomePage";
+import { LoginPage } from "./pages/LoginPage";
 
-const DEFAULT_USER_ID = "user_1";
+const DEFAULT_USER_ID = "";
 const USER_ID_STORAGE_KEY = "collaborative-editor-ai.user-id";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:3000";
 const apiClient = createApiClient(API_BASE_URL);
@@ -36,16 +37,35 @@ function readStoredUserId(): string {
  * Document pages use their own full-screen layout (Google Docs style).
  * The home shell wraps home routes with the AppBar.
  */
-function AppRoutes({ userId, onUserIdChange }: { userId: string; onUserIdChange(v: string): void }) {
+function AppRoutes({
+  userId,
+  onUserIdChange,
+  onSignOut,
+}: {
+  userId: string;
+  onUserIdChange(v: string): void;
+  onSignOut(): void;
+}) {
   const location = useLocation();
   const isDocPage = location.pathname.startsWith("/documents/");
+
+  if (!userId.trim()) {
+    return <LoginPage apiClient={apiClient} onAuthenticated={onUserIdChange} />;
+  }
 
   if (isDocPage) {
     return (
       <Routes>
         <Route
           path="/documents/:documentId"
-          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={onUserIdChange} />}
+          element={
+            <DocumentPage
+              apiClient={apiClient}
+              userId={userId}
+              onUserIdChange={onUserIdChange}
+              onSignOut={onSignOut}
+            />
+          }
         />
       </Routes>
     );
@@ -53,7 +73,7 @@ function AppRoutes({ userId, onUserIdChange }: { userId: string; onUserIdChange(
 
   return (
     <div className="home-shell">
-      <AppBar userId={userId} onUserIdChange={onUserIdChange} />
+      <AppBar userId={userId} onUserIdChange={onUserIdChange} onSignOut={onSignOut} />
       <Routes>
         <Route path="/" element={<HomePage apiClient={apiClient} userId={userId} />} />
       </Routes>
@@ -65,13 +85,17 @@ export function App() {
   const [userId, setUserId] = useState(readStoredUserId);
 
   useEffect(() => {
-    window.sessionStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    if (userId.trim()) {
+      window.sessionStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    } else {
+      window.sessionStorage.removeItem(USER_ID_STORAGE_KEY);
+    }
     window.localStorage.removeItem(USER_ID_STORAGE_KEY);
   }, [userId]);
 
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AppRoutes userId={userId} onUserIdChange={setUserId} />
+      <AppRoutes userId={userId} onUserIdChange={setUserId} onSignOut={() => setUserId("")} />
     </BrowserRouter>
   );
 }

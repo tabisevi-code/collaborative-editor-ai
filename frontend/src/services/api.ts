@@ -12,6 +12,7 @@ import {
   type DownloadedExportFile,
   type ExportJobStatusResponse,
   type GetDocumentResponse,
+  type LoginResponse,
   type ListVersionsResponse,
   type ListPermissionsResponse,
   type RealtimeSessionResponse,
@@ -30,6 +31,7 @@ import {
 type FetchLike = typeof fetch;
 
 export interface ApiClient {
+  login(userId: string): Promise<LoginResponse>;
   createDocument(payload: CreateDocumentRequest, userId?: string): Promise<CreateDocumentResponse>;
   getDocument(documentId: string, userId?: string): Promise<GetDocumentResponse>;
   updateDocument(documentId: string, payload: UpdateDocumentRequest, userId?: string): Promise<UpdateDocumentResponse>;
@@ -67,11 +69,7 @@ export interface ApiClient {
   createSession(documentId: string, userId?: string): Promise<RealtimeSessionResponse>;
 }
 
-interface LoginResponse {
-  accessToken: string;
-}
-
-const accessTokenCache = new Map<string, string>();
+const accessTokenCache = new Map<string, LoginResponse>();
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
@@ -132,7 +130,7 @@ function parseContentDispositionFileName(headerValue: string | null): string | n
 export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): ApiClient {
   const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
 
-  async function login(userId: string): Promise<string> {
+  async function login(userId: string): Promise<LoginResponse> {
     const normalizedUserId = userId.trim();
     if (!normalizedUserId) {
       throw new ApiError(401, "AUTH_REQUIRED", "user id is required");
@@ -156,9 +154,9 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
       throw toApiError(response.status, payload);
     }
 
-    const accessToken = (payload as LoginResponse).accessToken;
-    accessTokenCache.set(normalizedUserId, accessToken);
-    return accessToken;
+    const typedPayload = payload as LoginResponse;
+    accessTokenCache.set(normalizedUserId, typedPayload);
+    return typedPayload;
   }
 
   async function request<T>(path: string, init: RequestInit, userId?: string): Promise<T> {
@@ -167,8 +165,8 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
 
     try {
       if (userId?.trim()) {
-        const accessToken = await login(userId);
-        headers.set("Authorization", `Bearer ${accessToken}`);
+        const loginResponse = await login(userId);
+        headers.set("Authorization", `Bearer ${loginResponse.accessToken}`);
       }
 
       console.info("[frontend-api] request", {
@@ -204,8 +202,8 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
 
     try {
       if (userId?.trim()) {
-        const accessToken = await login(userId);
-        headers.set("Authorization", `Bearer ${accessToken}`);
+        const loginResponse = await login(userId);
+        headers.set("Authorization", `Bearer ${loginResponse.accessToken}`);
       }
 
       console.info("[frontend-api] request_blob", {
@@ -237,6 +235,7 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
   }
 
   return {
+    login,
     createDocument(payload, userId) {
       return request<CreateDocumentResponse>(
         "/documents",

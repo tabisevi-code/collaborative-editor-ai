@@ -23,6 +23,20 @@ It now includes:
 - realtime session issuance
 - standard error schema and request correlation ids
 
+## Evaluator Notes
+
+The quickest backend checks are:
+
+```bash
+curl http://localhost:3000/health
+open http://localhost:3000/docs/
+```
+
+Swagger/OpenAPI is available at:
+
+- `http://localhost:3000/docs/`
+- raw spec: `http://localhost:3000/docs/openapi.yaml`
+
 ## Requirements
 
 - Node.js `20+`
@@ -86,6 +100,7 @@ Example response:
 ```
 
 For local demo compatibility, `x-user-id` still works when `ALLOW_DEBUG_USER_HEADER=true`.
+The primary documented auth path, however, is the visible login flow backed by `POST /auth/login`.
 
 ## Quick API flow
 

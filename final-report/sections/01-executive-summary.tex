@@ -1,0 +1,42 @@
+\chapter{Executive Summary}
+
+This project designs and validates a collaborative document editor with an integrated AI writing
+assistant. The target product is intentionally framed as a simplified Google Docs competitor: multiple
+users can open the same document, see each other's edits in real time, manage sharing and access,
+invoke AI assistance on selected text, inspect document history, and export the result. The assignment
+brief asks not only for a prototype, but for evidence of disciplined requirements engineering,
+architecture, repository organization, and team coordination.
+
+The final system follows a modular monorepo structure with distinct frontend, backend, realtime,
+AI-service, shared, and documentation layers. The frontend is a React application focused on document
+editing, collaboration, permissions, AI suggestions, version history, and export. The backend is an
+Express API responsible for authentication, document lifecycle management, role-based access control,
+AI orchestration, export jobs, versioning, and realtime session issuance. The realtime service is a
+dedicated WebSocket/Yjs relay that enforces collaboration permissions and propagates awareness and
+content updates. Persistence is handled through SQLite for portability and deterministic setup, while
+AI generation is abstracted behind a provider interface supporting both a deterministic stub provider
+and a local LM Studio/OpenAI-compatible endpoint.
+
+Several architectural drivers had the strongest influence on the design. First, collaborative editing
+had to feel responsive and correct; this drove the decision to use Yjs-based push synchronization for
+document state instead of periodic polling. Second, AI needed to be useful but failure-tolerant; this
+led to an asynchronous job model with explicit \texttt{PENDING}/\texttt{RUNNING}/\texttt{SUCCEEDED}/\texttt{FAILED}
+states rather than blocking inline model calls. Third, the codebase had to be maintainable by a small
+student team; this motivated a monorepo, shared contract notes, explicit service boundaries, and
+root-level orchestration scripts for installation, running, testing, and demo reset.
+
+The delivered MVP intentionally goes beyond the assignment's minimum proof-of-concept threshold.
+The original PoC requirement was a working frontend communicating with a backend over at least one
+meaningful API, with data contracts matching the design. The final implementation still satisfies that
+minimum, but also demonstrates live collaboration, autosave, permission management, version history,
+revert, AI rewrite/summarize/translate jobs, partial AI acceptance, export jobs, Swagger/OpenAPI
+docs, CI automation, and Docker Compose configuration. At the same time, this report is explicit about
+MVP simplifications: authentication is local bearer-token login rather than a full external identity
+provider, the storage engine is SQLite rather than a production-scale RDBMS deployment, and the editor
+focuses on collaborative text rather than a full structured rich-text schema.
+
+The report is therefore structured to do two things at once: satisfy the assignment rubric as a
+requirements-and-architecture deliverable, and explain how the implemented MVP maps back to those
+design decisions. Each major architecture section includes a delivered-MVP note where the practical
+implementation intentionally differs from the longer-term target architecture. This keeps the report
+truthful, versionable, and aligned with the actual repository and demo.

@@ -2,9 +2,10 @@
 interface AppBarProps {
   userId: string;
   onUserIdChange(nextValue: string): void;
+  onSignOut(): void;
 }
 
-export function AppBar({ userId, onUserIdChange }: AppBarProps) {
+export function AppBar({ userId, onUserIdChange, onSignOut }: AppBarProps) {
   const initial = userId.charAt(0).toUpperCase() || "U";
 
   return (
@@ -45,6 +46,9 @@ export function AppBar({ userId, onUserIdChange }: AppBarProps) {
             spellCheck={false}
           />
         </label>
+        <button className="btn btn-secondary btn-sm" onClick={onSignOut}>
+          Sign out
+        </button>
         <button className="gd-icon-btn" title="Google apps">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="6"  cy="6"  r="2"/><circle cx="12" cy="6"  r="2"/><circle cx="18" cy="6"  r="2"/>

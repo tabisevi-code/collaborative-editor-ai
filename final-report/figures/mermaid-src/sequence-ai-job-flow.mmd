@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant U as User Browser
+    participant FE as Frontend
+    participant BE as Backend API
+    participant AIS as AI Integration Service
+    participant LLM as Stub / LM Studio Provider
+    participant DB as SQLite
+
+    U->>FE: Select text and invoke AI action
+    FE->>BE: POST /ai/rewrite|summarize|translate
+    BE->>DB: Validate permissions, quota, base version
+    BE->>DB: Create AI job (PENDING)
+    BE-->>FE: { jobId, statusUrl, status }
+    FE->>BE: Poll GET /ai/jobs/:jobId
+    BE->>AIS: Run provider request with selected text snapshot
+    AIS->>LLM: Prompt + scoped context
+    LLM-->>AIS: Generated suggestion or failure
+    AIS->>DB: Update job to SUCCEEDED/FAILED
+    BE-->>FE: Job status + proposedText or error
+    U->>FE: Apply all / apply selection / reject
+    FE->>BE: PUT /documents/:id/content (AI-aware save)
+    BE->>DB: Create version snapshots + persist content

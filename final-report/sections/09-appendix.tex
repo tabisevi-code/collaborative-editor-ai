@@ -1,0 +1,86 @@
+\chapter{Appendix}
+
+\section{Submission Artifact Inventory}
+
+The final submission package is composed of three coordinated artifacts:
+
+\begin{enumerate}
+  \item \textbf{This final report PDF}, which documents requirements, architecture, project management,
+  and proof-of-concept alignment.
+  \item \textbf{The Git repository}, which contains the runnable MVP, root orchestration scripts,
+  OpenAPI/contract notes, tests, Docker Compose configuration, CI workflow, and demo runbook.
+  \item \textbf{The recorded presentation}, which should cover team responsibilities, key design
+  decisions, and the proof-of-concept/demo flow.
+\end{enumerate}
+
+\section{Assignment Coverage Map}
+
+Table~\ref{tab:coverage-map} maps the assignment brief's required deliverables to the final report and the
+repository artifacts. This is included deliberately to reduce any ambiguity between the rubric, the
+written report, and the delivered MVP.
+
+\input{tables/rubric-coverage}
+
+\section{Version-Control and Collaboration Evidence}
+
+The proof-of-concept rubric explicitly evaluates whether the Git history is clean and whether there is
+evidence of team collaboration. The delivered repository supports that in three ways:
+
+\begin{itemize}
+  \item feature work was kept on named branches and integrated through pull-request-style review rather
+  than as one unstructured dump into \texttt{main},
+  \item commits were intentionally kept small and purposeful so architectural evolution is visible in the
+  history,
+  \item the repository contains both implementation artifacts and editable documentation artifacts so
+  architecture changes can be versioned alongside code rather than maintained separately.
+\end{itemize}
+
+This matters for the assignment because the architecture, repo organization, and PoC are meant to reflect
+the same design process rather than three unrelated deliverables.
+
+\section{Demo Checklist}
+
+The recommended live demo sequence is:
+
+\begin{enumerate}
+  \item Run \texttt{npm run demo:reset} from the repository root.
+  \item Open the frontend at \texttt{http://localhost:5173}.
+  \item Sign in as \texttt{user\_1} and create a new document.
+  \item Open the same document in a second browser/tab and switch the user to \texttt{user\_2}.
+  \item Grant editor access from the owner account.
+  \item Type in both windows and show live sync and presence.
+  \item Pause briefly to show autosave returning the header to a saved state.
+  \item Trigger an AI action, wait for the async job, then demonstrate full apply or partial apply.
+  \item Open version history and demonstrate revert.
+  \item Export the document and show Swagger/OpenAPI at \texttt{http://localhost:3000/docs/}.
+\end{enumerate}
+
+\section{Mermaid Diagram Source Listings}
+
+The assignment requires editable diagram source files. The report therefore includes Mermaid source
+listings for the reconstructed architecture diagrams used as living artifacts.
+
+\subsection{C4 Level 1 --- System Context (Mermaid Source)}
+\lstinputlisting{figures/mermaid-src/c4-level-1-system-context.mmd}
+
+\subsection{C4 Level 2 --- Container Diagram (Mermaid Source)}
+\lstinputlisting{figures/mermaid-src/c4-level-2-container.mmd}
+
+\subsection{C4 Level 3 --- Backend API Component Diagram (Mermaid Source)}
+\lstinputlisting{figures/mermaid-src/c4-level-3-backend-components.mmd}
+
+\subsection{Entity-Relationship Diagram (Mermaid Source)}
+\lstinputlisting{figures/mermaid-src/er-data-model.mmd}
+
+\section{Additional Mermaid Source Artifacts Available in the Repository}
+
+The repository also includes supplementary Mermaid sources for dynamic interaction views:
+
+\begin{itemize}
+  \item \texttt{final-report/figures/mermaid-src/sequence-document-open-and-sync.mmd}
+  \item \texttt{final-report/figures/mermaid-src/sequence-ai-job-flow.mmd}
+\end{itemize}
+
+These are maintained as editable assets but are intentionally not expanded into full code listings in the
+main report PDF, because the assignment's core diagram requirement is already satisfied through the C4
+and ER views included above.

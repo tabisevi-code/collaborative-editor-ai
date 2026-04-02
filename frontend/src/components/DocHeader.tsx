@@ -12,6 +12,7 @@ interface DocHeaderProps {
   saveState: SaveState;
   userId: string;
   onUserIdChange(nextValue: string): void;
+  onSignOut(): void;
   realtimeStatus?: string;
   onSave(): void;
   onAiOpen(): void;
@@ -51,6 +52,7 @@ export function DocHeader({
   saveState,
   userId,
   onUserIdChange,
+  onSignOut,
   realtimeStatus,
   onSave,
   onAiOpen,
@@ -153,6 +155,9 @@ export function DocHeader({
               spellCheck={false}
             />
           </label>
+          <button className="btn btn-sm btn-secondary" onClick={onSignOut}>
+            Sign out
+          </button>
         </div>
       </header>
 

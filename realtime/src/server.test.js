@@ -326,3 +326,62 @@ test("document_reverted events reset the shared Yjs content", async () => {
     await fixture.close();
   }
 });
+
+test("clients continue converging after a document_reverted event", async () => {
+  const fixture = createFixture();
+
+  try {
+    const wsA = await openSocket(
+      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_1", "owner"))}`
+    );
+    const wsB = await openSocket(
+      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_2", "editor"))}`
+    );
+
+    const clientA = attachYjsClient(wsA);
+    const clientB = attachYjsClient(wsB);
+    await Promise.all([waitForText(clientA, "Seed body"), waitForText(clientB, "Seed body")]);
+
+    const db = new Database(fixture.databasePath);
+    const now = new Date().toISOString();
+    db.prepare("UPDATE documents SET content = ?, updated_at = ?, revision_id = ?, current_version_id = ? WHERE document_id = ?").run(
+      "Reverted content",
+      now,
+      "rev_2",
+      "ver_2",
+      "doc_test"
+    );
+    db.prepare(
+      "INSERT INTO realtime_events (event_id, document_id, event_type, payload_json, created_at, delivered_at) VALUES (?, ?, ?, ?, ?, NULL)"
+    ).run(
+      "rt_test_2",
+      "doc_test",
+      "document_reverted",
+      JSON.stringify({
+        documentId: "doc_test",
+        currentVersionId: "ver_2",
+        revisionId: "rev_2",
+      }),
+      now
+    );
+    db.close();
+
+    await Promise.all([waitForText(clientA, "Reverted content"), waitForText(clientB, "Reverted content")]);
+
+    clientA.doc.transact(() => {
+      clientA.text.insert(clientA.text.length, " plus more");
+    }, "local-after-revert");
+
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, MESSAGE_SYNC);
+    syncProtocol.writeUpdate(encoder, Y.encodeStateAsUpdate(clientA.doc));
+    wsA.send(Buffer.from(encoding.toUint8Array(encoder)));
+
+    await waitForText(clientB, "Reverted content plus more");
+
+    await closeSocket(wsA);
+    await closeSocket(wsB);
+  } finally {
+    await fixture.close();
+  }
+});

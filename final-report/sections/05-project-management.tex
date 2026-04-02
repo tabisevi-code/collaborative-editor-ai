@@ -1,0 +1,119 @@
+\part{Project Management and Team Collaboration}
+
+\chapter{Project Management and Team Collaboration}
+
+This section explains how the team intended to turn architecture into working software. The assignment
+brief is explicit that repository organization, ownership, code review, and risk management are part of
+the assessed design, not administrative afterthoughts.
+
+\section{Team Structure and Ownership}
+
+The team structure follows service and concern boundaries rather than assigning work randomly.
+
+\begin{itemize}
+  \item \textbf{Tabina} owned architecture, infrastructure, repository organization, timeline, and final
+  consistency checks.
+  \item \textbf{Noel} owned the backend, API contracts, auth/authorization design, and realtime feasibility.
+  \item \textbf{Nurtore} owned AI behavior, cost/privacy considerations, and the data model.
+  \item \textbf{Ming Ming} owned frontend UX, collaboration flows, and API usability from the client side.
+\end{itemize}
+
+Features spanning multiple owners were coordinated through contract-first discussions. For example,
+realtime collaboration required alignment between frontend state behavior, backend role rules, and the
+separate realtime service; AI assistance required alignment between UI review behavior, backend async job
+contracts, AI provider behavior, versioning, and auditability.
+
+When team members disagreed on a technical decision, the group resolved the disagreement by asking which
+architectural driver mattered most for the feature in question. For example, demo reliability and
+maintainability justified a deterministic stub AI provider and SQLite in the delivered MVP, even though
+the longer-term architecture could target a fuller identity provider and larger-scale database deployment.
+
+\section{Development Workflow}
+
+\subsection{Branching Strategy}
+
+The intended workflow is feature-branch based with protected \texttt{main}. Small, purpose-specific
+branches reduce merge risk and keep code review focused. A representative naming convention is:
+
+\begin{itemize}
+  \item \texttt{backend/<name>-<feature>}
+  \item \texttt{frontend/<name>-<feature>}
+  \item \texttt{realtime/<name>-<feature>}
+  \item \texttt{mvp/<milestone>} for final integration work
+\end{itemize}
+
+The merge policy is PR-first: no direct pushes to \texttt{main}. Every feature branch is expected to leave
+the codebase runnable and testable.
+
+Representative PR approval criteria were:
+
+\begin{itemize}
+  \item the change compiles or runs locally,
+  \item the touched service tests pass or a manual verification note is included,
+  \item API contracts and docs stay aligned,
+  \item the commit history remains small, purposeful, and reviewable.
+\end{itemize}
+
+\subsection{Code Review Process}
+
+The team used small commits and service-scoped reviews as the default. Review criteria were:
+
+\begin{enumerate}
+  \item does the change preserve the documented contract,
+  \item is server-side authorization still enforced,
+  \item does the feature have enough verification (tests or a justified manual check),
+  \item does the change reduce or increase coupling,
+  \item can a teammate understand the code quickly.
+\end{enumerate}
+
+Backend and realtime changes were reviewed especially carefully when they affected collaboration,
+permissions, or contracts, because those areas tend to create cascading failures across the stack.
+
+\subsection{Task Tracking and Communication}
+
+Work was broken down by feature slices that mapped to ownership boundaries but were still traceable to
+requirements. Typical slices included: API contract establishment, document persistence, realtime session
+join, AI job orchestration, permission UI, and demo/deployment hardening.
+
+Task tracking is best represented through GitHub issues or project-board items labeled by ownership area,
+for example \texttt{backend}, \texttt{frontend}, \texttt{realtime}, \texttt{ai}, and \texttt{docs}. This makes
+dependencies visible and helps the team see when one milestone is blocked by infrastructure, contracts,
+or UI work owned elsewhere.
+
+In practice, the team used GitHub for branch work, pull requests, issues, and durable code review
+discussion, while Google Docs was used for collaborative drafting of the architecture and report content.
+Lightweight team chat was used for short coordination loops, but technical decisions were expected to be
+captured back into persistent artifacts such as ADRs, diagrams, PR discussions, README updates, and
+contract notes instead of being lost in chat history.
+
+\section{Development Methodology}
+
+The most suitable methodology for this project is a lightweight Kanban/Scrum hybrid.
+
+\begin{itemize}
+  \item \textbf{Why not pure Scrum?} A student team with cross-cutting architecture tasks often has
+  uneven availability and many infrastructure tasks that do not map cleanly to short user-story sprints.
+  \item \textbf{Why not pure ad hoc Kanban?} The assignment has staged deliverables --- requirements,
+  architecture, PoC, final MVP hardening --- that benefit from milestone-based planning.
+\end{itemize}
+
+In practice, the team can work in short milestone-oriented iterations while still prioritizing a Kanban
+board by urgency and dependency. Backlog order should favor infrastructure and contract work that unblocks
+multiple team members before polishing user-facing features.
+
+Non-feature work such as writing tests, refining diagrams, splitting large files, or hardening local
+startup scripts is treated as first-class work rather than invisible overhead. This is especially
+important because the assignment explicitly evaluates repository organization, consistency, and the extent
+to which the PoC matches the documented architecture.
+
+\section{Risk Assessment}
+
+\input{tables/risk-table}
+
+\section{Timeline and Milestones}
+
+The project timeline must be described in terms of verifiable outcomes, not vague progress statements.
+The milestones in Table~\ref{tab:milestones} reflect how the system could evolve through the semester
+without losing alignment between requirements, architecture, and code.
+
+\input{tables/milestones}

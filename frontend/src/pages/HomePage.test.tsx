@@ -6,6 +6,7 @@ import { HomePage } from "./HomePage";
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    login: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),

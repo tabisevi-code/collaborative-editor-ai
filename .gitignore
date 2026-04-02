@@ -31,3 +31,7 @@ logs/
 
 # Local runtime data
 backend/data/
+
+# Local report and assignment drafting artifacts
+AI1220_assignment (3).pdf
+software assignment.md

@@ -1,0 +1,11 @@
+{
+  "name": "collaborative-editor-ai-final-report",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "render:diagrams": "node scripts/render-diagrams.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.6.0"
+  }
+}

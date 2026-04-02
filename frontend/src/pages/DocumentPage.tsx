@@ -27,6 +27,7 @@ interface DocumentPageProps {
   apiClient: ApiClient;
   userId: string;
   onUserIdChange(nextValue: string): void;
+  onSignOut(): void;
 }
 
 const AUTO_SAVE_DELAY_MS = 1200;
@@ -36,7 +37,7 @@ const AUTO_SAVE_DELAY_MS = 1200;
  * The REST document snapshot is still critical for permissions, save/version
  * metadata, and recovery paths such as conflicts or revert.
  */
-export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPageProps) {
+export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: DocumentPageProps) {
   const { documentId = "" } = useParams();
   const navigate = useNavigate();
   const [document, setDocument] = useState<GetDocumentResponse | null>(null);
@@ -49,6 +50,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
+  const [syncNoticeMessage, setSyncNoticeMessage] = useState<string | null>(null);
   const [hasStaleRevisionConflict, setHasStaleRevisionConflict] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [showVersionPanel, setShowVersionPanel] = useState(false);
@@ -67,9 +69,9 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
     document,
     userId,
     onDocumentReverted: () => {
-      setSaveErrorMessage("This document changed remotely. The latest saved version has been reloaded.");
+      setSyncNoticeMessage("A remote revert was applied. Version metadata has been refreshed.");
       setHasStaleRevisionConflict(false);
-      void loadDocument({ reloadCollaboration: true });
+      void loadDocument();
     },
     onAccessRevoked: () => {
       setSaveErrorMessage("Your access was revoked while this document was open. Editing is now disabled.");
@@ -281,26 +283,52 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
     const liveText = options.content ?? (realtimeDocument.getText() || visibleContent);
     setSaveState("saving");
     setSaveErrorMessage(null);
+    setSyncNoticeMessage(null);
     setHasStaleRevisionConflict(false);
 
-    try {
+    async function saveWithRevision(baseRevisionId: string) {
       await apiClient.updateDocument(
         documentId,
         {
           content: liveText,
           requestId: nextRequestId("save"),
-          baseRevisionId: document.revisionId,
+          baseRevisionId,
           preUpdateVersionReason: options.preUpdateVersionReason,
           updateReason: options.updateReason,
           aiJobId: options.aiJobId ?? undefined,
         },
         userId
       );
+    }
+
+    try {
+      await saveWithRevision(document.revisionId);
 
       await loadDocument();
       setSaveState("saved");
       return true;
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409 && realtimeDocument.collaborationReady) {
+        try {
+          const latestDocument = await apiClient.getDocument(documentId, userId);
+
+          if (latestDocument.content === liveText) {
+            setDocument(latestDocument);
+            setDraftTitle(latestDocument.title);
+            setFallbackContent(latestDocument.content);
+            setSaveState("saved");
+            return true;
+          }
+
+          await saveWithRevision(latestDocument.revisionId);
+          await loadDocument();
+          setSaveState("saved");
+          return true;
+        } catch (retryError) {
+          error = retryError;
+        }
+      }
+
       const mapped = mapSaveError(error);
       setSaveState("error");
       setSaveErrorMessage(mapped.message);
@@ -324,6 +352,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   }
 
   function handleEditorChange(nextText: string) {
+    setSyncNoticeMessage(null);
     applyVisibleContent(nextText, "typing", { recordHistory: true });
   }
 
@@ -371,8 +400,9 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
 
   function handleRevert() {
     setSaveErrorMessage(null);
+    setSyncNoticeMessage(null);
     setHasStaleRevisionConflict(false);
-    void loadDocument({ reloadCollaboration: true });
+    void loadDocument();
   }
 
   function buildAiSelectionSnapshot(): AiSelectionSnapshot | null {
@@ -432,6 +462,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
         saveState={saveState}
         userId={userId}
         onUserIdChange={onUserIdChange}
+        onSignOut={onSignOut}
         realtimeStatus={realtimeStatus}
         onSave={handleSave}
         onAiOpen={() => {
@@ -503,6 +534,12 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {syncNoticeMessage && (
+              <div style={{ marginBottom: "1rem" }}>
+                <StatusBanner tone="info" title="Document updated" message={syncNoticeMessage} />
               </div>
             )}
 

@@ -9,6 +9,33 @@ The current MVP includes:
 - a dedicated realtime service that relays Yjs sync and awareness frames over WebSockets
 - SQLite persistence shared by backend and realtime services
 
+## Evaluator Quickstart
+
+If you want the fastest path to validate the MVP as an evaluator:
+
+```bash
+npm run install:all
+npm run demo:reset
+npm run test:all
+```
+
+Then open:
+
+- Frontend: `http://localhost:5173`
+- Swagger / OpenAPI UI: `http://localhost:3000/docs/`
+
+Recommended quick feature check:
+
+1. Sign in as `user_1`
+2. Create a document
+3. Open the same document in a second tab as `user_2`
+4. Grant `editor` access from `user_1`
+5. Verify live editing in both tabs
+6. Pause briefly to show autosave
+7. Run an AI action and apply the result
+8. Open version history and revert
+9. Export the document
+
 ## Monorepo Layout
 
 - `backend/`: Express API, auth, SQLite persistence, RBAC, AI job orchestration, exports, realtime session issuance
@@ -33,7 +60,7 @@ Notes:
 
 - `npm run dev:all` starts the backend, realtime service, and frontend together.
 - `npm run test:all` runs backend, frontend, realtime, and a root integration smoke test.
-- `npm run demo:reset` wipes the local SQLite database and starts a clean demo with the stub AI provider.
+- `npm run demo:reset` wipes the local SQLite database, stops stale local processes on the app ports, and starts a clean demo stack.
 - The backend reads `backend/.env` if present. Copy `backend/.env.example` to `backend/.env` if you want local overrides.
 
 ## Demo Mode
@@ -55,6 +82,13 @@ If Docker CLI is missing on macOS, install it with Homebrew:
 
 ```bash
 brew install docker docker-compose
+```
+
+If you do not use Docker Desktop on macOS, start a local Docker runtime first. One lightweight option is:
+
+```bash
+brew install colima
+colima start
 ```
 
 Then add the Compose plugin path to `~/.docker/config.json` so `docker compose` resolves the Homebrew plugin:
@@ -163,6 +197,7 @@ Important backend defaults:
 
 - Backend contract notes: `backend/CONTRACT.md`
 - Backend OpenAPI: `backend/docs/openapi.yaml`
+- Final report package: `final-report/`
 - Frontend details: `frontend/README.md`
 - Backend details: `backend/README.md`
 - Realtime details: `realtime/README.md`
