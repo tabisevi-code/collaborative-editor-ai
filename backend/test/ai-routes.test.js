@@ -173,3 +173,44 @@ test("GET /ai/jobs/:jobId returns 404 for unknown job IDs", async () => {
   assert.equal(result.status, 404);
   assert.equal(result.json.error.code, "NOT_FOUND");
 });
+
+test("POST /ai/jobs/:jobId/feedback records a reject decision for an accessible job", async () => {
+  const token = await loginAs("user_1");
+  const document = await createDocument(token, { content: "Example world" });
+
+  const createResult = await requestJson("/ai/rewrite", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: {
+      documentId: document.documentId,
+      selection: { start: 0, end: 7 },
+      selectedText: "Example",
+      contextBefore: "",
+      contextAfter: " world",
+      instruction: "Make it more formal",
+      baseVersionId: document.currentVersionId,
+      requestId: "req_ai_feedback_1",
+    },
+  });
+
+  assert.equal(createResult.status, 202);
+
+  const feedbackResult = await requestJson(`/ai/jobs/${createResult.json.jobId}/feedback`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: {
+      disposition: "rejected",
+    },
+  });
+
+  assert.equal(feedbackResult.status, 200);
+  assert.equal(feedbackResult.json.jobId, createResult.json.jobId);
+  assert.equal(feedbackResult.json.disposition, "rejected");
+
+  const auditLog = app.locals.context.repository.db
+    .prepare("SELECT action_type, metadata_json FROM audit_logs WHERE action_type = 'ai_job_feedback' ORDER BY created_at DESC LIMIT 1")
+    .get();
+
+  assert.equal(auditLog.action_type, "ai_job_feedback");
+  assert.equal(JSON.parse(auditLog.metadata_json).disposition, "rejected");
+});

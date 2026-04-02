@@ -2,6 +2,8 @@ import {
   ApiError,
   type ApiErrorShape,
   type AiJobResponse,
+  type AiJobFeedbackRequest,
+  type AiJobFeedbackResponse,
   type AiPolicyResponse,
   type CreateExportRequest,
   type CreateExportResponse,
@@ -54,6 +56,7 @@ export interface ApiClient {
   requestSummarizeJob(payload: SummarizeAiJobRequest, userId?: string): Promise<AiJobResponse>;
   requestTranslateJob(payload: TranslateAiJobRequest, userId?: string): Promise<AiJobResponse>;
   getAiJobStatus(jobId: string, userId?: string): Promise<AiJobResponse>;
+  recordAiJobFeedback(jobId: string, payload: AiJobFeedbackRequest, userId?: string): Promise<AiJobFeedbackResponse>;
   createExport(
     documentId: string,
     payload: CreateExportRequest,
@@ -398,6 +401,14 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
       };
+    },
+
+    recordAiJobFeedback(jobId, payload, userId) {
+      return request<AiJobFeedbackResponse>(
+        `/ai/jobs/${encodeURIComponent(jobId)}/feedback`,
+        { method: "POST", body: JSON.stringify(payload) },
+        userId
+      );
     },
 
     createExport(documentId, payload, userId) {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
-import { AiPanel } from "../components/AiPanel";
+import { useRealtimeDocument } from "../hooks/useRealtimeDocument";
+import { AiPanel, type AiApplyPayload } from "../components/AiPanel";
 import { AiPolicyPanel } from "../components/AiPolicyPanel";
 import { DocHeader } from "../components/DocHeader";
 import { ExportPanel } from "../components/ExportPanel";
@@ -10,114 +11,42 @@ import { PermissionsPanel } from "../components/PermissionsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { VersionHistoryPanel } from "../components/VersionHistoryPanel";
 import { applyToolbarAction, type ToolbarAction, type ToolbarSelection } from "../lib/richTextToolbar";
+import {
+  isViewerRole,
+  mapDocumentError,
+  mapSaveError,
+  type SaveState,
+  toRealtimeStatusLabel,
+  wordCount,
+} from "./documentPageUtils";
 import type { ApiClient } from "../services/api";
 import { createAiService, type AiSelectionSnapshot } from "../services/ai";
-import {
-  createRealtimeService,
-  type RealtimeConnectionState,
-  type RealtimeService,
-  type RemotePeer,
-} from "../services/realtime";
-import { ApiError, type DocumentRole, type GetDocumentResponse, type TextSelection } from "../types/api";
+import { ApiError, type GetDocumentResponse, type TextSelection } from "../types/api";
 
 interface DocumentPageProps {
   apiClient: ApiClient;
   userId: string;
+  onUserIdChange(nextValue: string): void;
 }
 
-type SaveState = "saved" | "unsaved" | "saving" | "error";
-
-function mapDocumentError(error: ApiError): string {
-  if (error.status === 404) return "Document not found.";
-  if (error.status === 401) return "Authentication is required. Refresh and sign in again.";
-  if (error.status === 403) return "You no longer have permission to open this document.";
-  if (error.code === "NETWORK_ERROR") return "Backend unavailable. Start the backend service and refresh.";
-  return error.message || "The document could not be loaded.";
-}
-
-function mapSaveError(error: unknown): { message: string; stale: boolean } {
-  if (error instanceof ApiError) {
-    if (error.status === 409) {
-      return {
-        message: "Your draft is based on an older revision. Reload the latest saved version before saving again.",
-        stale: true,
-      };
-    }
-
-    if (error.status === 403) {
-      return {
-        message: "You do not have permission to save this document.",
-        stale: false,
-      };
-    }
-
-    if (error.status === 413) {
-      return {
-        message: error.message || "The document content exceeds the backend size limit.",
-        stale: false,
-      };
-    }
-
-    if (error.code === "NETWORK_ERROR") {
-      return {
-        message: "Backend unavailable. Start the backend service and try saving again.",
-        stale: false,
-      };
-    }
-
-    return {
-      message: error.message || "Could not save this document.",
-      stale: false,
-    };
-  }
-
-  return {
-    message: "Could not save this document.",
-    stale: false,
-  };
-}
-
-function wordCount(text: string): number {
-  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
-}
-
-function toRealtimeStatusLabel(state: RealtimeConnectionState, peerCount: number): string {
-  if (state === "connected") {
-    return peerCount > 0 ? `Live with ${peerCount + 1} participants` : "Live sync connected";
-  }
-
-  if (state === "connecting") {
-    return "Connecting live sync…";
-  }
-
-  if (state === "error") {
-    return "Live sync unavailable";
-  }
-
-  if (state === "closed") {
-    return "Live sync offline";
-  }
-
-  return "Live sync idle";
-}
+const AUTO_SAVE_DELAY_MS = 1200;
 
 /**
  * This page treats the collaborative Yjs document as the live source of text.
  * The REST document snapshot is still critical for permissions, save/version
  * metadata, and recovery paths such as conflicts or revert.
  */
-export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
+export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPageProps) {
   const { documentId = "" } = useParams();
+  const navigate = useNavigate();
   const [document, setDocument] = useState<GetDocumentResponse | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
-  const [collaborationText, setCollaborationText] = useState("");
   const [fallbackContent, setFallbackContent] = useState("");
   const [selection, setSelection] = useState<TextSelection>({ start: 0, end: 0 });
   const [selectedText, setSelectedText] = useState("");
-  const [effectiveRole, setEffectiveRole] = useState<DocumentRole>("viewer");
-  const [remotePeers, setRemotePeers] = useState<RemotePeer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [hasStaleRevisionConflict, setHasStaleRevisionConflict] = useState(false);
@@ -127,32 +56,36 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
   const [showAiPolicyPanel, setShowAiPolicyPanel] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
-  const [realtimeState, setRealtimeState] = useState<RealtimeConnectionState>("idle");
-  const [realtimeError, setRealtimeError] = useState<string | null>(null);
-  const [collaborationReady, setCollaborationReady] = useState(false);
-  const [accessRevoked, setAccessRevoked] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const requestIdRef = useRef(0);
   const historyRef = useRef<string[]>([""]);
   const historyIndexRef = useRef(0);
   const aiService = createAiService(apiClient, userId);
-  const realtimeServiceRef = useRef<RealtimeService | null>(null);
+  const realtimeDocument = useRealtimeDocument({
+    apiClient,
+    document,
+    userId,
+    onDocumentReverted: () => {
+      setSaveErrorMessage("This document changed remotely. The latest saved version has been reloaded.");
+      setHasStaleRevisionConflict(false);
+      void loadDocument({ reloadCollaboration: true });
+    },
+    onAccessRevoked: () => {
+      setSaveErrorMessage("Your access was revoked while this document was open. Editing is now disabled.");
+    },
+  });
 
-  if (!realtimeServiceRef.current) {
-    realtimeServiceRef.current = createRealtimeService(apiClient);
-  }
-
-  const visibleContent = collaborationReady ? collaborationText : fallbackContent;
-
-  useEffect(() => {
-    realtimeServiceRef.current?.disconnect();
-    realtimeServiceRef.current = createRealtimeService(apiClient);
-
-    return () => {
-      realtimeServiceRef.current?.disconnect();
-    };
-  }, [apiClient, documentId]);
+  const visibleContent = realtimeDocument.collaborationReady
+    ? realtimeDocument.collaborationText
+    : fallbackContent;
+  const isViewer = isViewerRole(realtimeDocument.role);
+  const isReadOnly = realtimeDocument.accessRevoked || isViewer;
+  const canManagePermissions = realtimeDocument.role === "owner";
+  const canManageAiPolicy = realtimeDocument.role === "owner";
+  const canRevert = realtimeDocument.role === "owner";
+  const collaboratorCount = realtimeDocument.remotePeers.length;
+  const realtimeStatus = toRealtimeStatusLabel(realtimeDocument.realtimeState, collaboratorCount);
 
   function resetEditorHistory(nextValue: string) {
     historyRef.current = [nextValue];
@@ -182,12 +115,12 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
 
     console.debug("[document-page] content_updated", {
       reason,
-      collaborationReady,
+      collaborationReady: realtimeDocument.collaborationReady,
       length: nextValue.length,
     });
 
-    if (collaborationReady) {
-      const didApply = realtimeServiceRef.current?.applyLocalChange(nextValue);
+    if (realtimeDocument.collaborationReady) {
+      const didApply = realtimeDocument.applyLocalChange(nextValue);
       if (!didApply) {
         setSaveErrorMessage("This document is currently read-only.");
       }
@@ -219,6 +152,7 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
   } = {}) {
     setIsLoading(true);
     setErrorMessage(null);
+    setLoadErrorCode(null);
 
     try {
       const fetched = await apiClient.getDocument(documentId, userId);
@@ -231,16 +165,16 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
       setDraftTitle(fetched.title);
       setFallbackContent(fetched.content);
       resetEditorHistory(fetched.content);
-      setAccessRevoked(false);
-      setEffectiveRole(fetched.role);
 
       if (reloadCollaboration) {
-        realtimeServiceRef.current?.applyRemoteReset(fetched.content);
-        setCollaborationText(fetched.content);
+        realtimeDocument.applyRemoteReset(fetched.content);
       }
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN_ERROR", "unknown error");
-      setErrorMessage(mapDocumentError(apiError));
+      setLoadErrorCode(apiError.code);
+      setErrorMessage(
+        apiError.status === 404 ? "This document no longer exists. Returning to the home page..." : mapDocumentError(apiError)
+      );
       setDocument(null);
     } finally {
       setIsLoading(false);
@@ -252,58 +186,18 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
   }, [apiClient, documentId, userId]);
 
   useEffect(() => {
-    if (!document) {
+    if (loadErrorCode !== "NOT_FOUND") {
       return;
     }
 
-    const realtimeService = realtimeServiceRef.current;
-    if (!realtimeService) {
-      return;
-    }
-
-    setRealtimeError(null);
-    setRemotePeers([]);
-    setCollaborationReady(false);
-    setCollaborationText("");
-
-    void realtimeService.connect(document.documentId, {
-      userId,
-      role: document.role,
-      initialContent: document.content,
-      onConnectionStateChange: (nextState) => {
-        setRealtimeState(nextState);
-        if (nextState === "connected") {
-          setCollaborationReady(true);
-          setCollaborationText(realtimeService.getText());
-        }
-      },
-      onTextChange: (text) => {
-        setCollaborationText(text);
-      },
-      onPeersChange: (peers) => {
-        setRemotePeers(peers);
-      },
-      onPermissionChange: (role) => {
-        setEffectiveRole(role);
-      },
-      onDocumentReverted: () => {
-        setSaveErrorMessage("This document changed remotely. The latest saved version has been reloaded.");
-        setHasStaleRevisionConflict(false);
-        void loadDocument({ reloadCollaboration: true });
-      },
-      onAccessRevoked: () => {
-        setAccessRevoked(true);
-        setEffectiveRole("viewer");
-        setSaveErrorMessage("Your access was revoked while this document was open. Editing is now disabled.");
-      },
-      onError: (message) => setRealtimeError(message),
-    });
+    const timeoutId = window.setTimeout(() => {
+      navigate("/", { replace: true });
+    }, 2200);
 
     return () => {
-      realtimeService.disconnect();
-      setRemotePeers([]);
+      window.clearTimeout(timeoutId);
     };
-  }, [apiClient, document?.documentId, document?.revisionId, userId]);
+  }, [loadErrorCode, navigate]);
 
   useEffect(() => {
     if (!document) {
@@ -314,12 +208,12 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
       return;
     }
 
-    const liveText = collaborationReady ? collaborationText : fallbackContent;
+    const liveText = realtimeDocument.collaborationReady ? realtimeDocument.collaborationText : fallbackContent;
     setSaveState(liveText === document.content ? "saved" : "unsaved");
-  }, [collaborationReady, collaborationText, fallbackContent, document, saveState]);
+  }, [realtimeDocument.collaborationReady, realtimeDocument.collaborationText, fallbackContent, document, saveState]);
 
   useEffect(() => {
-    const activeText = collaborationReady ? collaborationText : fallbackContent;
+    const activeText = realtimeDocument.collaborationReady ? realtimeDocument.collaborationText : fallbackContent;
     const { start, end } = selection;
     if (end > start) {
       setSelectedText(activeText.slice(start, end));
@@ -327,11 +221,45 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
     }
 
     setSelectedText("");
-  }, [collaborationReady, collaborationText, fallbackContent, selection]);
+  }, [realtimeDocument.collaborationReady, realtimeDocument.collaborationText, fallbackContent, selection]);
+
+  useEffect(() => {
+    if (!document || isReadOnly || saveState !== "unsaved") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void handleSave();
+    }, AUTO_SAVE_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [document?.documentId, document?.revisionId, isReadOnly, saveState, visibleContent]);
 
   function nextRequestId(prefix: string) {
     requestIdRef.current += 1;
     return `${prefix}_${Date.now()}_${requestIdRef.current}`;
+  }
+
+  async function recordAiFeedback(
+    jobId: string | null,
+    disposition: "applied_full" | "applied_partial" | "rejected",
+    feedback?: { appliedText?: string; appliedRange?: TextSelection }
+  ) {
+    if (!jobId) {
+      return;
+    }
+
+    try {
+      await aiService.recordFeedback(jobId, disposition, feedback);
+    } catch (error) {
+      console.warn("[document-page] ai_feedback_failed", {
+        jobId,
+        disposition,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async function reloadLatestDocument() {
@@ -340,12 +268,17 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
     await loadDocument({ reloadCollaboration: true });
   }
 
-  async function handleSave() {
+  async function handleSave(options: {
+    content?: string;
+    preUpdateVersionReason?: string;
+    updateReason?: string;
+    aiJobId?: string | null;
+  } = {}) {
     if (!document || saveState === "saving") {
-      return;
+      return false;
     }
 
-    const liveText = realtimeServiceRef.current?.getText() || visibleContent;
+    const liveText = options.content ?? (realtimeDocument.getText() || visibleContent);
     setSaveState("saving");
     setSaveErrorMessage(null);
     setHasStaleRevisionConflict(false);
@@ -353,17 +286,26 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
     try {
       await apiClient.updateDocument(
         documentId,
-        { content: liveText, requestId: nextRequestId("save"), baseRevisionId: document.revisionId },
+        {
+          content: liveText,
+          requestId: nextRequestId("save"),
+          baseRevisionId: document.revisionId,
+          preUpdateVersionReason: options.preUpdateVersionReason,
+          updateReason: options.updateReason,
+          aiJobId: options.aiJobId ?? undefined,
+        },
         userId
       );
 
       await loadDocument();
       setSaveState("saved");
+      return true;
     } catch (error) {
       const mapped = mapSaveError(error);
       setSaveState("error");
       setSaveErrorMessage(mapped.message);
       setHasStaleRevisionConflict(mapped.stale);
+      return false;
     }
   }
 
@@ -378,36 +320,53 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
       end: ta.selectionEnd,
     };
     setSelection(nextSelection);
-    realtimeServiceRef.current?.setCursorSelection(nextSelection.start === nextSelection.end ? null : nextSelection);
+    realtimeDocument.setCursorSelection(nextSelection.start === nextSelection.end ? null : nextSelection);
   }
 
   function handleEditorChange(nextText: string) {
     applyVisibleContent(nextText, "typing", { recordHistory: true });
   }
 
-  function handleAiApply(suggestion: string) {
+  async function handleAiApply(payload: AiApplyPayload) {
+    if (!document) {
+      return;
+    }
+
+    const targetSelection = payload.targetSelection;
     let nextContent = visibleContent;
 
-    if (collaborationReady) {
-      const service = realtimeServiceRef.current;
-      if (!service) {
-        return;
-      }
-
-      const didApply = service.replaceSelection(selection, suggestion);
+    if (realtimeDocument.collaborationReady) {
+      const didApply = realtimeDocument.replaceSelection(targetSelection, payload.text);
       if (!didApply) {
         return;
       }
 
-      nextContent = service.getText();
+      nextContent = realtimeDocument.getText();
     } else {
       nextContent =
-        visibleContent.slice(0, selection.start) + suggestion + visibleContent.slice(selection.end);
+        visibleContent.slice(0, targetSelection.start) + payload.text + visibleContent.slice(targetSelection.end);
       applyVisibleContent(nextContent, "ai-apply", { recordHistory: true });
     }
 
-    const nextCursor = selection.start + suggestion.length;
+    const nextCursor = targetSelection.start + payload.text.length;
     syncSelection({ start: nextCursor, end: nextCursor }, nextContent);
+
+    const saved = await handleSave({
+      content: nextContent,
+      preUpdateVersionReason: "pre_ai_apply",
+      updateReason: payload.mode === "partial" ? "ai_apply_partial" : "ai_apply",
+      aiJobId: payload.jobId,
+    });
+
+    if (saved) {
+      await recordAiFeedback(payload.jobId, payload.mode === "partial" ? "applied_partial" : "applied_full", {
+        appliedText: payload.text,
+        appliedRange: {
+          start: targetSelection.start,
+          end: targetSelection.start + payload.text.length,
+        },
+      });
+    }
   }
 
   function handleRevert() {
@@ -422,7 +381,7 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
     }
 
     const { start, end } = selection;
-    const activeText = realtimeServiceRef.current?.getText() || visibleContent;
+    const activeText = realtimeDocument.getText() || visibleContent;
     if (end <= start) {
       return null;
     }
@@ -437,7 +396,7 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
   }
 
   function handleToolbarAction(action: ToolbarAction) {
-    if (effectiveRole === "viewer" || accessRevoked) {
+    if (realtimeDocument.role === "viewer" || realtimeDocument.accessRevoked) {
       return;
     }
 
@@ -463,23 +422,16 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
     syncSelection(result.selection, result.value);
   }
 
-  const isViewer = effectiveRole === "viewer";
-  const isReadOnly = accessRevoked || isViewer;
-  const canManagePermissions = effectiveRole === "owner";
-  const canManageAiPolicy = effectiveRole === "owner";
-  const canRevert = effectiveRole === "owner";
-  const collaboratorCount = remotePeers.length;
-  const realtimeStatus = toRealtimeStatusLabel(realtimeState, collaboratorCount);
-
   return (
     <div className="gdoc-shell">
       <DocHeader
-        document={document ? { ...document, role: effectiveRole } : null}
+        document={document ? { ...document, role: realtimeDocument.role } : null}
         draftTitle={draftTitle}
         canEditTitle={false}
         onTitleChange={setDraftTitle}
         saveState={saveState}
         userId={userId}
+        onUserIdChange={onUserIdChange}
         realtimeStatus={realtimeStatus}
         onSave={handleSave}
         onAiOpen={() => {
@@ -503,18 +455,25 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
         {errorMessage && (
           <div style={{ maxWidth: 816, margin: "0 auto", padding: "1rem 96px" }}>
             <StatusBanner tone="error" title="Load failed" message={errorMessage} />
+            {loadErrorCode === "NOT_FOUND" && (
+              <div style={{ marginTop: "0.75rem" }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => navigate("/", { replace: true })}>
+                  Go back home now
+                </button>
+              </div>
+            )}
           </div>
         )}
 
         {document && (
           <div className="gdoc-page">
-            {(isReadOnly || !collaborationReady) && (
+            {(isReadOnly || !realtimeDocument.collaborationReady) && (
               <div style={{ marginBottom: "1rem" }}>
                 <StatusBanner
                   tone={isReadOnly ? "warning" : "info"}
                   title={isReadOnly ? "View-only" : "Offline editing"}
                   message={
-                    accessRevoked
+                    realtimeDocument.accessRevoked
                       ? "Your access was revoked while this document was open. Refresh or return home."
                       : isViewer
                         ? "You have viewer access — editing is disabled."
@@ -524,9 +483,9 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
               </div>
             )}
 
-            {realtimeError && (
+            {realtimeDocument.realtimeError && (
               <div style={{ marginBottom: "1rem" }}>
-                <StatusBanner tone="warning" title="Realtime notice" message={realtimeError} />
+                <StatusBanner tone="warning" title="Realtime notice" message={realtimeDocument.realtimeError} />
               </div>
             )}
 
@@ -547,9 +506,9 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
               </div>
             )}
 
-            {remotePeers.length > 0 && (
+            {realtimeDocument.remotePeers.length > 0 && (
               <div className="gdoc-collaborator-overlay" aria-label="Live collaborators">
-                {remotePeers.map((peer) => (
+                {realtimeDocument.remotePeers.map((peer) => (
                   <div key={peer.clientId} className="gdoc-collaborator-chip">
                     <span className="gdoc-collaborator-dot" style={{ backgroundColor: peer.color }} />
                     <span>{peer.userId}</span>
@@ -575,7 +534,7 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
 
             {showMeta && (
               <div style={{ marginTop: "2rem", borderTop: "1px solid var(--gd-border)", paddingTop: "1.5rem" }}>
-                <MetadataCard document={{ ...document, role: effectiveRole }} />
+                <MetadataCard document={{ ...document, role: realtimeDocument.role }} />
               </div>
             )}
           </div>
@@ -627,6 +586,7 @@ export function DocumentPage({ apiClient, userId }: DocumentPageProps) {
           selectedText={selectedText}
           aiService={aiService}
           onApply={handleAiApply}
+          onReject={(jobId) => recordAiFeedback(jobId, "rejected")}
           onClose={() => setShowAiPanel(false)}
         />
       )}

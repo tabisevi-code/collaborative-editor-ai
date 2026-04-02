@@ -1,5 +1,7 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const swaggerUi = require("swagger-ui-express");
 
 const { createDatabase } = require("./db/database");
 const { createAppRepository } = require("./repositories/appRepository");
@@ -18,7 +20,19 @@ const { documentsRoutes } = require("./routes/documentsRoutes");
 const { aiRoutes } = require("./routes/aiRoutes");
 const { exportRoutes } = require("./routes/exportRoutes");
 const { sessionsRoutes } = require("./routes/sessionsRoutes");
-const { createLmStudioProvider } = require("../../ai-service/src");
+const { createLmStudioProvider, createStubProvider } = require("../../ai-service/src");
+
+function createConfiguredAiProvider(config) {
+  if (config.aiProvider === "lmstudio") {
+    return createLmStudioProvider({
+      endpoint: config.aiProviderEndpoint,
+      model: config.aiModel,
+      timeoutMs: config.aiTimeoutMs,
+    });
+  }
+
+  return createStubProvider();
+}
 
 function createApp(config, dependencies = {}) {
   if (!config || typeof config !== "object") {
@@ -35,13 +49,7 @@ function createApp(config, dependencies = {}) {
     repository,
     contentMaxBytes: config.documentContentMaxBytes,
   });
-  const aiProvider =
-    dependencies.aiProvider ||
-    createLmStudioProvider({
-      endpoint: config.aiProviderEndpoint,
-      model: config.aiModel,
-      timeoutMs: config.aiTimeoutMs,
-    });
+  const aiProvider = dependencies.aiProvider || createConfiguredAiProvider(config);
   const aiService =
     dependencies.aiService ||
     createAiService({
@@ -58,6 +66,7 @@ function createApp(config, dependencies = {}) {
 
   const app = express();
   app.disable("x-powered-by");
+  const openApiSpecPath = path.join(__dirname, "..", "docs", "openapi.yaml");
   app.locals.context = {
     db,
     repository,
@@ -72,6 +81,21 @@ function createApp(config, dependencies = {}) {
   app.use(requestIdMiddleware());
   app.use(requestLoggerMiddleware());
   app.use(express.json({ limit: config.jsonBodyLimit }));
+
+  app.get("/docs/openapi.yaml", (_req, res) => {
+    res.type("application/yaml");
+    return res.sendFile(openApiSpecPath);
+  });
+  app.use(
+    "/docs",
+    swaggerUi.serve,
+    swaggerUi.setup(undefined, {
+      explorer: true,
+      swaggerOptions: {
+        url: "/docs/openapi.yaml",
+      },
+    })
+  );
 
   app.use(healthRoutes());
   app.use(authRoutes({ authService }));

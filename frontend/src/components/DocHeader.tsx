@@ -11,6 +11,7 @@ interface DocHeaderProps {
   onTitleChange(title: string): void;
   saveState: SaveState;
   userId: string;
+  onUserIdChange(nextValue: string): void;
   realtimeStatus?: string;
   onSave(): void;
   onAiOpen(): void;
@@ -49,6 +50,7 @@ export function DocHeader({
   onTitleChange,
   saveState,
   userId,
+  onUserIdChange,
   realtimeStatus,
   onSave,
   onAiOpen,
@@ -141,7 +143,16 @@ export function DocHeader({
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
           </button>
-          <div className="gdoc-user-avatar" title={`Signed in as ${userId}`}>{initial}</div>
+          <label className="user-switch-chip gdoc-user-switch" title="Active user ID for this tab">
+            <div className="gdoc-user-avatar">{initial}</div>
+            <input
+              value={userId}
+              onChange={(event) => onUserIdChange(event.target.value)}
+              placeholder="user_1"
+              aria-label="Active user ID"
+              spellCheck={false}
+            />
+          </label>
         </div>
       </header>
 

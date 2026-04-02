@@ -1,8 +1,19 @@
 # Architecture Diagrams
 
-This folder contains exported diagrams used in the architecture section:
+This folder now contains both exported PNGs and editable Mermaid sources.
 
-- C4 Level 1 — System Context
-- C4 Level 2 — Container Diagram
-- C4 Level 3 — Backend API Component Diagram
-- ER Diagram — Data Model
+PNG exports:
+
+- `c4-level-1-system-context.png`
+- `c4-level-2-container.png`
+- `c4-level-3-backend-component.png`
+- `er-diagram.png`
+
+Editable sources:
+
+- `system-context.mmd`
+- `container-diagram.mmd`
+- `backend-components.mmd`
+- `er-diagram.mmd`
+
+The Mermaid sources are the canonical editable versions for coursework updates and report alignment.

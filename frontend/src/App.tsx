@@ -11,8 +11,24 @@ const USER_ID_STORAGE_KEY = "collaborative-editor-ai.user-id";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:3000";
 const apiClient = createApiClient(API_BASE_URL);
 
+function readSessionUserId(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.sessionStorage.getItem(USER_ID_STORAGE_KEY)?.trim() || null;
+}
+
 function readStoredUserId(): string {
-  if (typeof window === "undefined") return DEFAULT_USER_ID;
+  if (typeof window === "undefined") {
+    return DEFAULT_USER_ID;
+  }
+
+  const sessionUserId = readSessionUserId();
+  if (sessionUserId) {
+    return sessionUserId;
+  }
+
   return window.localStorage.getItem(USER_ID_STORAGE_KEY)?.trim() || DEFAULT_USER_ID;
 }
 
@@ -29,7 +45,7 @@ function AppRoutes({ userId, onUserIdChange }: { userId: string; onUserIdChange(
       <Routes>
         <Route
           path="/documents/:documentId"
-          element={<DocumentPage apiClient={apiClient} userId={userId} />}
+          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={onUserIdChange} />}
         />
       </Routes>
     );
@@ -49,7 +65,8 @@ export function App() {
   const [userId, setUserId] = useState(readStoredUserId);
 
   useEffect(() => {
-    window.localStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    window.sessionStorage.setItem(USER_ID_STORAGE_KEY, userId);
+    window.localStorage.removeItem(USER_ID_STORAGE_KEY);
   }, [userId]);
 
   return (

@@ -89,6 +89,14 @@ function createDocumentsService({ repository, contentMaxBytes }) {
       }
 
       if (document.revisionId !== payload.baseRevisionId) {
+        if (document.content === payload.content) {
+          return {
+            documentId,
+            updatedAt: document.updatedAt,
+            revisionId: document.revisionId,
+          };
+        }
+
         throw createHttpError(409, "CONFLICT", "base revision is stale", {
           expectedRevisionId: document.revisionId,
           actualRevisionId: payload.baseRevisionId,
@@ -101,6 +109,9 @@ function createDocumentsService({ repository, contentMaxBytes }) {
         requestId: payload.requestId,
         content: payload.content,
         baseRevisionId: payload.baseRevisionId,
+        preUpdateVersionReason: payload.preUpdateVersionReason,
+        updateReason: payload.updateReason,
+        aiJobId: payload.aiJobId,
       });
     },
 

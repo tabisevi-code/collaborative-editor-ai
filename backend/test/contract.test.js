@@ -111,6 +111,16 @@ test("GET /health returns 200 { ok: true }", async () => {
   assert.deepEqual(result.json, { ok: true });
 });
 
+test("/docs is publicly available and serves both Swagger UI and the raw OpenAPI file", async () => {
+  const uiResult = await requestJson("/docs/");
+  assert.equal(uiResult.status, 200);
+  assert.match(uiResult.text, /Swagger UI/i);
+
+  const specResult = await requestJson("/docs/openapi.yaml");
+  assert.equal(specResult.status, 200);
+  assert.match(specResult.text, /openapi:\s*3\.0\.3/);
+});
+
 test("POST /documents requires auth", async () => {
   const result = await requestJson("/documents", {
     method: "POST",
@@ -274,6 +284,87 @@ test("content updates are idempotent and enforce stale revision checks", async (
 
   assert.equal(staleUpdate.status, 409);
   assertStandardError(staleUpdate.json, "CONFLICT");
+});
+
+test("stale saves that already match the latest persisted content return success instead of a conflict", async () => {
+  const ownerToken = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: { title: "Converged", content: "Hello" },
+  });
+
+  const documentId = createResult.json.documentId;
+
+  const firstUpdate = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_converged_1",
+      content: "Hello world",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  assert.equal(firstUpdate.status, 200);
+  assert.equal(firstUpdate.json.revisionId, "rev_2");
+
+  const convergedReplay = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_converged_2",
+      content: "Hello world",
+      baseRevisionId: "rev_1",
+    },
+  });
+
+  assert.equal(convergedReplay.status, 200);
+  assert.equal(convergedReplay.json.revisionId, "rev_2");
+
+  const versionsResult = await requestJson(`/documents/${documentId}/versions`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  assert.equal(versionsResult.status, 200);
+  assert.equal(versionsResult.json.versions.length, 2);
+});
+
+test("ai-flavored saves create a pre-apply snapshot and a dedicated ai version entry", async () => {
+  const ownerToken = await loginAs("user_1");
+  const createResult = await requestJson("/documents", {
+    method: "POST",
+    headers: authHeaders(ownerToken),
+    body: { title: "AI Apply", content: "Original text" },
+  });
+
+  const documentId = createResult.json.documentId;
+
+  const updateResult = await requestJson(`/documents/${documentId}/content`, {
+    method: "PUT",
+    headers: authHeaders(ownerToken),
+    body: {
+      requestId: "req_update_ai_apply",
+      content: "Improved text",
+      baseRevisionId: "rev_1",
+      preUpdateVersionReason: "pre_ai_apply",
+      updateReason: "ai_apply",
+      aiJobId: "aijob_123",
+    },
+  });
+
+  assert.equal(updateResult.status, 200);
+  assert.equal(updateResult.json.revisionId, "rev_3");
+
+  const versionsResult = await requestJson(`/documents/${documentId}/versions`, {
+    headers: { Authorization: `Bearer ${ownerToken}` },
+  });
+
+  assert.equal(versionsResult.status, 200);
+  assert.deepEqual(
+    versionsResult.json.versions.map((version) => version.reason),
+    ["ai_apply", "pre_ai_apply", "initial_create"]
+  );
 });
 
 test("list versions and revert keep history instead of overwriting it", async () => {

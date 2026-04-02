@@ -92,3 +92,30 @@ Stable response fields that frontend and tests depend on:
   }
 }
 ```
+
+## POST /sessions
+
+```json
+{
+  "sessionId": "sess_123",
+  "wsUrl": "ws://localhost:3001/ws?token=...",
+  "role": "owner|editor|viewer"
+}
+```
+
+## Realtime Protocol Notes
+
+The frontend and realtime service currently rely on this stable split:
+
+- binary Yjs frames:
+  - type `0` = sync
+  - type `1` = awareness
+- JSON control messages:
+  - `session_ready`
+  - `permission_updated`
+  - `document_reverted`
+  - `access_revoked`
+  - `error`
+  - `ping` / `pong`
+
+The backend issues the signed `wsUrl` via `POST /sessions`, and the realtime service validates that token before joining the document room.

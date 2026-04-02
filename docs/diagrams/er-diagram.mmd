@@ -1,0 +1,71 @@
+erDiagram
+    USERS ||--o{ DOCUMENTS : owns
+    USERS ||--o{ DOCUMENT_PERMISSIONS : receives
+    DOCUMENTS ||--o{ DOCUMENT_PERMISSIONS : grants
+    DOCUMENTS ||--o{ DOCUMENT_VERSIONS : snapshots
+    DOCUMENTS ||--|| AI_POLICIES : configures
+    DOCUMENTS ||--o{ AI_JOBS : scopes
+    DOCUMENTS ||--o{ EXPORT_JOBS : scopes
+    DOCUMENTS ||--o{ REALTIME_EVENTS : emits
+    USERS ||--o{ AI_JOBS : creates
+    USERS ||--o{ EXPORT_JOBS : creates
+
+    USERS {
+      text user_id PK
+      text display_name
+      text global_role
+      text access_token
+    }
+
+    DOCUMENTS {
+      text document_id PK
+      text owner_user_id FK
+      text title
+      text content
+      text current_version_id
+      text revision_id
+    }
+
+    DOCUMENT_PERMISSIONS {
+      text document_id FK
+      text user_id FK
+      text role
+    }
+
+    DOCUMENT_VERSIONS {
+      text version_id PK
+      text document_id FK
+      int version_number
+      text created_by_user_id FK
+      text reason
+    }
+
+    AI_POLICIES {
+      text document_id PK
+      int ai_enabled
+      text allowed_roles_csv
+      int daily_quota
+    }
+
+    AI_JOBS {
+      text job_id PK
+      text document_id FK
+      text user_id FK
+      text action_type
+      text status
+    }
+
+    EXPORT_JOBS {
+      text job_id PK
+      text document_id FK
+      text user_id FK
+      text format
+      text status
+    }
+
+    REALTIME_EVENTS {
+      text event_id PK
+      text document_id FK
+      text event_type
+      text delivered_at
+    }

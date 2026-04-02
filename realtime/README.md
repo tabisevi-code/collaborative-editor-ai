@@ -2,6 +2,14 @@
 
 This service hosts the WebSocket layer for collaborative editing.
 
+For repo-wide install, dev, and test commands, start from the root README:
+
+```bash
+npm run install:all
+npm run dev:all
+npm run test:all
+```
+
 Responsibilities:
 
 - Validate session tokens issued by the backend
@@ -16,6 +24,7 @@ Responsibilities:
 cd realtime
 npm install
 npm run dev
+npm test
 ```
 
 Environment variables:

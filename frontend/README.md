@@ -1,74 +1,52 @@
-# Frontend PoC
+# Frontend
 
-This frontend is a React + TypeScript PoC for the Collaborative Editor AI project.
+The frontend is a React + TypeScript client for the Collaborative Editor AI MVP.
 
-It intentionally targets the current backend proof of concept only:
+Implemented today:
 
-- Create a document
-- Open an existing document by ID
-- View backend metadata and role
-- Edit a local unsaved draft when the role permits it
+- login by local user id
+- create and open documents
+- role-aware editing (`owner`, `editor`, `viewer`)
+- live collaboration over Yjs + WebSockets
+- version history and revert flows
+- permission management
+- AI rewrite, summarize, and translate suggestion flows
+- export controls and document metadata panels
 
-It does not yet implement:
+For repo-wide install, dev, and test commands, start from the root README:
 
-- WebSocket real-time collaboration
-- AI polling or suggestion UI
-- Save/update document APIs
+```bash
+npm run install:all
+npm run dev:all
+npm run test:all
+```
 
-## Requirements
-
-- Node.js `20+`
-- npm `10+`
-
-## Setup
+## Local Frontend Commands
 
 ```bash
 cd frontend
 npm install
+npm run dev
+npm test
 ```
 
 ## Environment
 
-Create a `.env` file inside `frontend/` if you need a custom backend URL:
+Create `frontend/.env` only if you need a non-default backend URL:
 
 ```bash
 VITE_API_BASE_URL=http://localhost:3000
 ```
 
-If not provided, the app defaults to `http://localhost:3000`.
+If omitted, the frontend defaults to `http://localhost:3000`.
 
-## Run
+## Manual Smoke Flow
 
-Start the backend first:
-
-```bash
-cd backend
-npm install
-npm run dev
-```
-
-Then start the frontend:
-
-```bash
-cd frontend
-npm run dev
-```
-
-Open the URL printed by Vite in your browser.
-
-## Test
-
-```bash
-cd frontend
-npm test
-```
-
-## Manual smoke flow
-
-1. Set `User ID` to `user_1`.
-2. Create a document with a title and some content.
-3. Confirm the app navigates to `/documents/:documentId`.
-4. Re-open the same document ID and confirm the role is `owner`.
-5. Change `User ID` to a different value and open the same document again.
-6. Confirm the role changes to `viewer` and the editor becomes read-only.
-7. Stop the backend and confirm the UI shows a clear backend unavailable message.
+1. Start the full stack from the repo root with `npm run dev:all`.
+2. Open the frontend at the Vite URL, usually `http://localhost:5173`.
+3. Sign in as `user_1` and create a document.
+4. Open the same document in another browser as `user_2`.
+5. Use the owner account to grant `editor` or `viewer` access.
+6. Confirm live cursor/presence updates and collaborative text sync.
+7. Save a revision, open version history, and try revert.
+8. Use an AI action if an OpenAI-compatible provider is configured.

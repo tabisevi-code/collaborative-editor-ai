@@ -18,6 +18,7 @@ Explicit non-responsibilities:
 
 Technology:
 - Node.js
+- Deterministic stub provider for local demos
 - OpenAI-compatible REST client for LM Studio
 
 Current internal contract:

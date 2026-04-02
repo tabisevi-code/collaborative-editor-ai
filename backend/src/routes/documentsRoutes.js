@@ -12,6 +12,9 @@ const UpdateContentSchema = z.object({
   requestId: z.string().trim().min(1, "requestId is required").max(128),
   content: z.string(),
   baseRevisionId: z.string().trim().min(1, "baseRevisionId is required"),
+  preUpdateVersionReason: z.string().trim().min(1).max(64).optional(),
+  updateReason: z.string().trim().min(1).max(64).optional(),
+  aiJobId: z.string().trim().min(1).max(128).optional(),
 });
 
 const RevertSchema = z.object({

@@ -1,0 +1,40 @@
+flowchart TB
+    App[app.js]
+    Routes[Routes]
+    AuthSvc[authService]
+    DocSvc[documentsService]
+    AiSvc[aiService]
+    ExportSvc[exportService]
+    SessionSvc[sessionsService]
+    Repo[Repository Facade]
+    UsersRepo[usersRepository]
+    DocsRepo[documentsRepository]
+    PermRepo[permissionsRepository]
+    AiRepo[aiRepository]
+    ExportRepo[exportsRepository]
+    DB[(SQLite)]
+
+    App --> Routes
+    Routes --> AuthSvc
+    Routes --> DocSvc
+    Routes --> AiSvc
+    Routes --> ExportSvc
+    Routes --> SessionSvc
+
+    AuthSvc --> Repo
+    DocSvc --> Repo
+    AiSvc --> Repo
+    ExportSvc --> Repo
+    SessionSvc --> Repo
+
+    Repo --> UsersRepo
+    Repo --> DocsRepo
+    Repo --> PermRepo
+    Repo --> AiRepo
+    Repo --> ExportRepo
+
+    UsersRepo --> DB
+    DocsRepo --> DB
+    PermRepo --> DB
+    AiRepo --> DB
+    ExportRepo --> DB

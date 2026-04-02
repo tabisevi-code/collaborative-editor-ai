@@ -115,12 +115,13 @@ function createAiService({ repository, provider }) {
       baseVersionId: payload.baseVersionId,
     });
 
-    logInfo("ai_job_created", {
-      jobId: job.jobId,
-      actionType,
-      documentId: payload.documentId,
-      baseVersionId: payload.baseVersionId,
-    });
+      logInfo("ai_job_created", {
+        jobId: job.jobId,
+        actionType,
+        documentId: payload.documentId,
+        baseVersionId: payload.baseVersionId,
+        requestId: payload.requestId,
+      });
 
     queueJobExecution(job.jobId);
     return toAiJobResponse(job);
@@ -208,6 +209,23 @@ function createAiService({ repository, provider }) {
 
       ensureDocumentAccess(repository, user, job.documentId, "viewer");
       return toAiJobResponse(job);
+    },
+
+    recordJobFeedback(user, jobId, payload) {
+      const job = repository.getAiJob(jobId);
+      if (!job) {
+        throw createHttpError(404, "NOT_FOUND", "AI job not found");
+      }
+
+      ensureDocumentAccess(repository, user, job.documentId, "viewer");
+      return repository.recordAiJobFeedback({
+        actorUserId: user.userId,
+        documentId: job.documentId,
+        jobId,
+        disposition: payload.disposition,
+        appliedText: payload.appliedText,
+        appliedRange: payload.appliedRange,
+      });
     },
 
     async runJobForTests(jobId) {

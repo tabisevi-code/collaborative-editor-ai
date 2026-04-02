@@ -26,6 +26,9 @@ export interface UpdateDocumentRequest {
   content: string;
   requestId: string;
   baseRevisionId: string;
+  preUpdateVersionReason?: string;
+  updateReason?: string;
+  aiJobId?: string;
 }
 
 export interface UpdateDocumentResponse {
@@ -155,6 +158,20 @@ export interface AiJobResponse {
   baseVersionId?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type AiJobFeedbackDisposition = "applied_full" | "applied_partial" | "rejected";
+
+export interface AiJobFeedbackRequest {
+  disposition: AiJobFeedbackDisposition;
+  appliedText?: string;
+  appliedRange?: TextSelection;
+}
+
+export interface AiJobFeedbackResponse {
+  jobId: string;
+  disposition: AiJobFeedbackDisposition;
+  recordedAt: string;
 }
 
 export type ExportFormat = "txt" | "json" | "pdf" | "docx";

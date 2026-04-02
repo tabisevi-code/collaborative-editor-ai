@@ -1,199 +1,176 @@
 # Collaborative Editor AI
 
-A multi-service course project for collaborative document editing with AI-assisted writing workflows.
+Collaborative Editor AI is a small monorepo for collaborative document editing with AI-assisted writing workflows.
 
-The repository contains a working end-to-end prototype with:
+The current MVP includes:
 
-- document creation, loading, editing, and saving
-- document-level roles (`owner`, `editor`, `viewer`)
-- version history and revert
-- permission management
-- AI rewrite, summarize, and translate jobs
-- export jobs
-- realtime collaboration over WebSockets and Yjs
-- SQLite-backed persistence for local development
+- REST document APIs with auth, RBAC, versions, revert, exports, and AI jobs
+- a React frontend wired to those APIs
+- a dedicated realtime service that relays Yjs sync and awareness frames over WebSockets
+- SQLite persistence shared by backend and realtime services
 
-## What This Repo Contains
+## Monorepo Layout
 
-This project is organized as a small monorepo:
+- `backend/`: Express API, auth, SQLite persistence, RBAC, AI job orchestration, exports, realtime session issuance
+- `frontend/`: React + TypeScript client for documents, permissions, version history, AI, and live collaboration
+- `realtime/`: WebSocket relay for Yjs sync, awareness, and backend-driven permission/revert events
+- `ai-service/`: AI provider adapter and prompt execution logic imported by the backend
+- `shared/`: shared contracts such as realtime session token signing
+- `docs/`: ADRs, architecture notes, and diagrams
+- `config/`: configuration notes
 
-- `frontend/`: React + TypeScript web client
-- `backend/`: REST API, auth, RBAC, persistence, AI job orchestration, exports, session issuance
-- `realtime/`: WebSocket collaboration service for live editing and presence
-- `ai-service/`: provider adapter and AI execution core used by the backend
-- `shared/`: shared notes and intended cross-service contracts
-- `docs/`: architecture notes, diagrams, and ADRs
-- `config/`: configuration references
+## Quickstart (3 Commands)
 
-## Architecture At A Glance
-
-The runtime flow is:
-
-1. The frontend talks to the backend over HTTP for document CRUD, history, permissions, AI jobs, exports, and realtime session creation.
-2. The backend persists documents, versions, permissions, and AI jobs in SQLite.
-3. The frontend opens a WebSocket connection to the realtime service using a backend-issued session.
-4. The realtime service validates that session, enforces current permissions, and syncs Yjs document updates and awareness state.
-5. AI requests are routed through the backend, which uses the provider code in `ai-service/` to call an OpenAI-compatible endpoint such as LM Studio.
-
-## Current Product Shape
-
-The current prototype is not a full Google Docs clone. A few important implementation notes:
-
-- The stored document format is still plain text.
-- The formatting toolbar in the frontend is functional, but it currently applies text markers such as `**bold**`, `*italic*`, `~~strike~~`, and list prefixes rather than true rich-text markup.
-- Realtime collaboration is implemented at the text-sync layer with Yjs.
-- AI suggestions are generated asynchronously and applied from the client side.
-
-## Requirements
-
-- Node.js `20+`
-- npm `10+`
-
-The repo also includes `.nvmrc` with the intended Node major version.
-
-## Quick Start
-
-### 1. Install dependencies
+From the repo root:
 
 ```bash
-cd backend && npm install
-cd ../frontend && npm install
-cd ../realtime && npm install
+npm run install:all
+npm run dev:all
+npm run test:all
 ```
 
-### 2. Configure the backend
+Notes:
 
-The backend reads environment variables from `backend/.env`.
+- `npm run dev:all` starts the backend, realtime service, and frontend together.
+- `npm run test:all` runs backend, frontend, realtime, and a root integration smoke test.
+- `npm run demo:reset` wipes the local SQLite database and starts a clean demo with the stub AI provider.
+- The backend reads `backend/.env` if present. Copy `backend/.env.example` to `backend/.env` if you want local overrides.
 
-Create it from the example:
+## Demo Mode
+
+For the most reliable live demo path:
 
 ```bash
-cd backend
-cp .env.example .env
+npm run install:all
+npm run demo:reset
 ```
 
-Important defaults:
+The full step-by-step presenter script lives in [`DEMO.md`](./DEMO.md).
 
-- `PORT=3000`
-- `DATABASE_PATH=./data/collaborative-editor-ai.sqlite`
-- `REALTIME_WS_BASE_URL=ws://localhost:3001/ws`
-- `REALTIME_SHARED_SECRET=collaborative-editor-ai-dev-secret`
-- `AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions`
+## Docker Compose
 
-If you do not have a local LLM provider running, the app will still work except for AI features.
+You can also run the whole stack in containers:
 
-### 3. Start the services
-
-Start the backend:
+If Docker CLI is missing on macOS, install it with Homebrew:
 
 ```bash
-cd backend
-npm run dev
+brew install docker docker-compose
 ```
 
-Start the realtime service in a second terminal:
+Then add the Compose plugin path to `~/.docker/config.json` so `docker compose` resolves the Homebrew plugin:
+
+```json
+{
+  "cliPluginsExtraDirs": [
+    "/opt/homebrew/lib/docker/cli-plugins"
+  ]
+}
+```
 
 ```bash
-cd realtime
-npm run dev
+docker compose up --build
 ```
 
-Start the frontend in a third terminal:
+When you want a clean slate again:
 
 ```bash
-cd frontend
-npm run dev
+docker compose down -v
 ```
 
-Then open the Vite URL shown in the terminal, usually `http://localhost:5173`.
+## Default Local Ports
 
-## Default Ports
-
-- Frontend: Vite default, usually `5173`
+- Frontend: `5173`
 - Backend: `3000`
 - Realtime: `3001`
 
-## Local Demo Flow
+## Service Commands
 
-1. Open the frontend.
-2. Sign in with a simple local user ID such as `user_1`.
-3. Create a document.
-4. Open the same document as another user, such as `user_2`, to verify sharing behavior.
-5. Use the owner account to grant `editor` or `viewer` access.
-6. Edit content and save a new revision.
-7. Open version history and revert if needed.
-8. Try AI rewrite, summarize, or translate if an AI provider is available.
-
-## Authentication
-
-The backend supports a lightweight local bearer-token flow:
-
-```bash
-curl -X POST http://localhost:3000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"user_1"}'
-```
-
-When `ALLOW_DEBUG_USER_HEADER=true`, local development can also use the `x-user-id` header for convenience.
-
-## Testing
-
-Run tests per service:
+If you want to work on a single service directly:
 
 ### Backend
 
 ```bash
 cd backend
+npm install
+npm run dev
 npm test
-```
-
-Extra backend test entry points:
-
-```bash
-npm run test:unit
-npm run test:contract
-npm run test:smoke
 ```
 
 ### Frontend
 
 ```bash
 cd frontend
+npm install
+npm run dev
 npm test
-npm run build
 ```
 
 ### Realtime
 
 ```bash
 cd realtime
+npm install
+npm run dev
 npm test
 ```
 
-## API And Contract References
+## Runtime Flow
 
-Useful backend references:
+1. The frontend authenticates through `POST /auth/login`.
+2. The frontend uses the backend for document CRUD, permissions, versions, exports, AI jobs, and session creation.
+3. The backend persists documents, versions, permissions, jobs, and realtime events in SQLite.
+4. The frontend opens a WebSocket connection to the realtime service using the backend-issued session URL.
+5. The realtime service validates that session, enforces current role, and relays Yjs sync and awareness updates.
 
-- REST contract summary: `backend/CONTRACT.md`
-- OpenAPI document: `backend/docs/openapi.yaml`
+## Manual Demo Flow
 
-## Repository Notes
+1. Run `npm run dev:all` from the repo root.
+2. Open the frontend at `http://localhost:5173`.
+3. Sign in as `user_1` and create a document.
+4. Open the same document in a second browser as `user_2`.
+5. Grant `editor` or `viewer` access from the owner account.
+6. Verify live collaboration, presence, save/version history, and AI suggestion flows.
 
-- SQLite is the default and intended development database in this repo.
-- The realtime service reads the same SQLite database as the backend for permission-sensitive collaboration behavior.
-- The backend is currently the primary orchestration layer. The `ai-service/` folder provides the AI provider and job execution logic that the backend imports.
-- There is no root-level workspace script orchestration yet; each service is started independently.
+## Testing
 
-## Known Limitations
+Repo-wide:
 
-- Rich text is not stored as structured markup yet.
-- AI features depend on an external OpenAI-compatible model endpoint being available.
-- The repo is optimized for local development and coursework, not production deployment.
+```bash
+npm run test:all
+```
 
-## Further Reading
+This runs:
 
-- [Backend README](./backend/README.md)
-- [Frontend README](./frontend/README.md)
-- [Realtime README](./realtime/README.md)
-- [AI Service README](./ai-service/README.md)
-- [Architecture Docs](./docs/architecture/README.md)
+- `backend` unit + smoke tests
+- `frontend` Vitest suite
+- `realtime` Node test suite
+- a root integration smoke test that starts backend and realtime against a temp SQLite file
+
+## Environment Notes
+
+Important backend defaults:
+
+- `PORT=3000`
+- `DATABASE_PATH=./data/collaborative-editor-ai.sqlite`
+- `REALTIME_WS_BASE_URL=ws://localhost:3001/ws`
+- `REALTIME_SHARED_SECRET=collaborative-editor-ai-dev-secret`
+- `AI_PROVIDER=stub`
+- `AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions`
+
+`AI_PROVIDER=stub` is the safe local default. Switch to `AI_PROVIDER=lmstudio` if you want to exercise a real OpenAI-compatible model endpoint.
+
+## Contracts And Docs
+
+- Backend contract notes: `backend/CONTRACT.md`
+- Backend OpenAPI: `backend/docs/openapi.yaml`
+- Frontend details: `frontend/README.md`
+- Backend details: `backend/README.md`
+- Realtime details: `realtime/README.md`
+- Architecture notes: `docs/architecture/README.md`
+
+## Current Limitations
+
+- Documents are stored as plain text, not structured rich-text markup.
+- Rich formatting controls currently apply lightweight text markers and editor behaviors rather than a full document schema.
+- AI depends on an external OpenAI-compatible endpoint.
+- Services are intentionally simple and local-first for coursework rather than production deployment.
