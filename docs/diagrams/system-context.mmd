@@ -1,16 +1,12 @@
-flowchart LR
-    UserA[User A Browser]
-    UserB[User B Browser]
-    Frontend[Frontend React App]
-    Backend[Backend REST API]
-    Realtime[Realtime WebSocket Service]
-    SQLite[(SQLite Database)]
-    AI[OpenAI-Compatible AI Provider]
+%%{init: {"theme":"base","flowchart":{"curve":"linear"},"themeVariables":{"background":"#ffffff","primaryColor":"#f8fafc","primaryBorderColor":"#111827","primaryTextColor":"#111827","secondaryColor":"#eef2ff","secondaryBorderColor":"#1d4ed8","secondaryTextColor":"#111827","tertiaryColor":"#fef3c7","tertiaryBorderColor":"#b45309","tertiaryTextColor":"#111827","clusterBkg":"#ffffff","clusterBorder":"#111827","lineColor":"#111827","fontSize":"20px"}}}%%
+flowchart TB
+    User["User<br/>Uses browser to<br/>edit and collaborate"]
+    Admin["Admin<br/>Manages access<br/>and AI permissions"]
+    System["System<br/>Real-time collaborative<br/>document editor with<br/>AI assistant"]
+    IdP["Identity Provider<br/>Authenticates users"]
+    LLM["LLM API Provider<br/>External AI service used<br/>for text processing"]
 
-    UserA --> Frontend
-    UserB --> Frontend
-    Frontend --> Backend
-    Frontend --> Realtime
-    Backend --> SQLite
-    Realtime --> SQLite
-    Backend --> AI
+    User -->|edits documents,<br/>triggers AI| System
+    Admin -->|manages permissions<br/>and AI limits| System
+    System -->|authentication<br/>requests| IdP
+    System -->|sends text for<br/>AI processing| LLM

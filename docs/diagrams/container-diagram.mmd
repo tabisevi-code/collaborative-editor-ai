@@ -1,20 +1,24 @@
-flowchart TB
-    subgraph Client[Client]
-      FE[Frontend / Vite / React]
+%%{init: {"theme":"base","flowchart":{"curve":"linear"},"themeVariables":{"background":"#ffffff","primaryColor":"#f8fafc","primaryBorderColor":"#111827","primaryTextColor":"#111827","secondaryColor":"#eef2ff","secondaryBorderColor":"#1d4ed8","secondaryTextColor":"#111827","tertiaryColor":"#fef3c7","tertiaryBorderColor":"#b45309","tertiaryTextColor":"#111827","clusterBkg":"#ffffff","clusterBorder":"#111827","lineColor":"#111827","fontSize":"20px"}}}%%
+flowchart LR
+    User["User"]
+
+    subgraph System[Collaborative Editor System]
+        direction LR
+        RT["Real-Time Service<br/>WebSocket / Yjs relay"]
+        FE["Frontend<br/>React Web App"]
+        BE["Backend API<br/>Node.js / Express"]
+        DB[("Database<br/>SQLite")]
+        AIS["AI Integration Service<br/>Job orchestration + provider adapter"]
     end
 
-    subgraph Services[Runtime Services]
-      BE[Backend / Express]
-      RT[Realtime / ws + Yjs relay]
-      AIS[ai-service provider adapter]
-    end
+    IdP["Identity Provider<br/>Target production auth"]
+    LLM["LLM API Provider"]
 
-    subgraph Data[Persistence]
-      DB[(SQLite)]
-    end
-
-    FE -->|REST| BE
-    FE -->|WebSocket| RT
-    BE -->|reads/writes| DB
-    RT -->|permission + revert polling| DB
-    BE -->|imports provider logic| AIS
+    User --> FE
+    FE -->|REST<br/>communication| BE
+    FE -->|WebSocket<br/>communication| RT
+    BE --> DB
+    RT --> DB
+    BE --> AIS
+    AIS --> LLM
+    BE -.->|validate<br/>access token| IdP
