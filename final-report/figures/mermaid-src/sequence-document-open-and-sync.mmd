@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant U as User Browser
+    participant FE as Frontend
+    participant BE as Backend API
+    participant RT as Realtime Service
+    participant DB as SQLite
+
+    U->>FE: Open shared document URL
+    FE->>BE: GET /documents/:documentId
+    BE->>DB: Load document, role, version, revision
+    DB-->>BE: Document snapshot
+    BE-->>FE: JSON document payload
+    FE->>BE: POST /sessions
+    BE->>DB: Validate access and issue session
+    DB-->>BE: Access confirmed
+    BE-->>FE: { sessionId, wsUrl, role }
+    FE->>RT: WebSocket connect using signed token
+    RT->>DB: Validate session + current permission
+    DB-->>RT: Access + latest event state
+    RT-->>FE: session_ready + initial Yjs sync
+    FE-->>RT: Sync/awareness updates during editing
+    RT-->>FE: Remote collaborator updates

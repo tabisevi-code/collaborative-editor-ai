@@ -1,0 +1,487 @@
+\part{System Architecture}
+
+\chapter{System Architecture}
+
+\section{Architectural Drivers}
+
+The architecture was not chosen in a vacuum. The most important design drivers were ranked before the
+service boundaries were fixed because different priorities would have produced a meaningfully different
+system.
+
+\begin{table}[H]
+\centering
+\caption{Ranked architectural drivers}
+\label{tab:architectural-drivers}
+\begin{tabularx}{\textwidth}{c p{4.2cm} X}
+\toprule
+\textbf{Rank} & \textbf{Driver} & \textbf{Why it mattered} \\
+\midrule
+1 & Collaboration correctness and convergence & The product fails if two users cannot trust what they are seeing while editing the same document. This pushed the design toward a CRDT-backed push model rather than naive polling or last-write-wins merging. \\
+2 & Low-latency user experience & Typing, presence, and AI interaction feedback must feel responsive enough to resemble a real collaborative editor, not a batch workflow. \\
+3 & Maintainable modular codebase & The assignment explicitly evaluates repository organization and feature decomposition. The architecture had to support multiple owners working in parallel without turning into a god-service monolith. \\
+4 & AI safety, predictability, and cost control & AI is a core product feature, not a novelty. This drove the asynchronous job model, scoped prompting, and explicit policy/quota controls. \\
+5 & Demo and reproducibility reliability & The MVP had to be runnable under grading pressure. This drove root orchestration scripts, SQLite portability, Docker Compose, CI, and deterministic reset behavior. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+These rankings directly shaped the implementation: the realtime service is separated from the REST API,
+AI uses asynchronous job handling rather than inline blocking calls, persistence is centralized in
+SQLite for deterministic setup, and the repository is organized by service and domain boundaries rather
+than by one large application file.
+
+\section{C4 Level 1 --- System Context}
+
+Figure~\ref{fig:c4-l1} shows the system at the outermost level. The collaborative editor interacts with
+human collaborators, a target identity provider, and an LLM provider. This level answers the question:
+what is inside the system boundary, and what external actors or services affect behavior?
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\textwidth]{c4-level-1-system-context.png}
+  \caption{C4 Level 1 --- System context diagram}
+  \label{fig:c4-l1}
+\end{figure}
+
+\implementationnote{The delivered MVP uses a visible local login flow backed by
+\texttt{POST /auth/login} rather than a full external OAuth/OIDC identity provider. The system-context
+diagram therefore captures the target production-style identity boundary, while the MVP demonstrates the
+same trust boundary with a simpler bearer-token implementation suitable for coursework and demos.}
+
+\section{C4 Level 2 --- Container Diagram}
+
+Figure~\ref{fig:c4-l2} decomposes the system into the major runtime containers. The frontend is the user
+entry point. The backend API owns document lifecycle, permissions, versioning, export, AI orchestration,
+and session issuance. The realtime service is dedicated to Yjs synchronization, awareness, and role-aware
+write gating. The AI integration service abstracts provider selection, and the database stores the shared
+system state.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.9\textwidth]{c4-level-2-container.png}
+  \caption{C4 Level 2 --- Container diagram}
+  \label{fig:c4-l2}
+\end{figure}
+
+\implementationnote{The delivered MVP uses SQLite rather than a production-scale database deployment.
+The architecture keeps the same container responsibilities, but the concrete persistence technology is
+optimized for a reproducible academic environment. The realtime service and backend share the same SQLite
+state to keep sessions, permissions, versions, and backend-driven collaboration events aligned.}
+
+\section{C4 Level 3 --- Backend API Component Diagram}
+
+The backend was chosen as the container to zoom into because it contains most of the assignment's
+cross-cutting concerns: document CRUD, RBAC, AI job orchestration, export job orchestration, versioning,
+and realtime session issuance. Figure~\ref{fig:c4-l3} shows the controller/service/repository split used
+to keep the API layer maintainable.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{c4-level-3-backend-components.png}
+  \caption{C4 Level 3 --- Backend API component diagram}
+  \label{fig:c4-l3}
+\end{figure}
+
+\implementationnote{The delivered backend closely follows this structure: routes/controllers handle HTTP
+translation, auth middleware validates bearer tokens, services encode document/AI/export/session rules,
+repositories isolate SQL, and the realtime service is notified through document-scoped events rather than
+through direct in-process mutation. The MVP uses SQLite and local bearer-token authentication in place of
+the fuller target stack shown in the conceptual diagram.}
+
+\section{Feature Decomposition}
+
+The architecture is organized around features/modules rather than a single monolithic application file.
+Each module exposes a narrow interface, depends on a small set of collaborators, and can be tested in
+relative isolation.
+
+\begin{table}[H]
+\centering
+\caption{Feature decomposition}
+\label{tab:feature-decomposition}
+\begin{tabularx}{\textwidth}{p{3.2cm}p{4.3cm}X}
+\toprule
+\textbf{Module} & \textbf{Primary Responsibility} & \textbf{Dependencies / Exposed Interface} \\
+\midrule
+Frontend editor and state & Render document content, local editing state, AI review panel, permissions, history, export controls & Depends on Backend API and Realtime Service; exposes user actions as REST and websocket calls \\
+Realtime synchronization layer & Relay Yjs sync and awareness frames, enforce role-aware writes, react to backend permission/revert events & Depends on signed sessions, shared DB state, and frontend websocket clients; exposes session-ready and live sync behavior \\
+Backend API layer & Authenticate users, enforce RBAC, manage document lifecycle, issue realtime sessions, orchestrate AI and exports & Depends on repositories, AI provider adapter, and realtime-facing event model; exposes REST contracts and standard error schema \\
+AI integration service & Translate user AI requests into provider calls, manage async jobs, unify error handling & Depends on provider implementation and backend persistence; exposes job creation and polling semantics \\
+Document storage and versioning & Persist documents, versions, policies, jobs, permissions, idempotency keys, and audit records & Depends on SQLite; exposes repository methods to backend services \\
+Shared contract/utilities layer & Session-token helpers and reusable cross-service logic & Depends on no single service; exposes shared helpers used by backend and realtime \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{AI Integration Design}
+
+The AI assistant is treated as a core product feature, not a cosmetic API add-on. That means the design
+must answer four questions simultaneously: what context the model sees, how users review and apply
+results, how collaboration behaves while the AI is running, and how cost and failure are controlled.
+
+\subsection{Context and Scope}
+
+The delivered MVP sends the selected text plus a small amount of surrounding context to the AI provider.
+This is the most pragmatic choice for coursework: it is cheaper than sending the full document, keeps
+latency lower, and aligns with how rewrite/summarize/translate are actually invoked in the UI. The
+backend contract requires the frontend to send a client-side selection snapshot containing the selected
+range, the selected text, and the nearby context so that AI jobs can be linked to a concrete document
+state.
+
+For very long documents, the system intentionally does not default to sending the entire document. This
+keeps token usage bounded and reduces privacy exposure. A future production design could add
+chunked/restructure flows, but the delivered MVP focuses on scoped selection-based tasks that are easier
+to reason about and test.
+
+\subsection{Suggestion UX}
+
+AI suggestions are presented in a side panel rather than silently modifying the document. This preserves
+user control and matches the assignment's emphasis on AI as a product feature rather than a hidden
+automation step. The delivered MVP supports:
+
+\begin{itemize}
+  \item full apply of the AI output,
+  \item partial apply by selecting only a portion of the AI output,
+  \item explicit rejection without modifying document content,
+  \item immediate visibility of AI job state.
+\end{itemize}
+
+Applying AI is treated as a document-changing action and therefore creates version snapshots for
+traceability. This design also aligns with the version history and revert model: AI is not special-cased
+ into an untracked side path.
+
+\subsection{AI During Collaboration}
+
+The design intentionally avoids hard-locking a region when AI is invoked. Instead, the system snapshots
+the selected text, lets the AI run asynchronously, and allows other collaborators to continue editing.
+When the AI response arrives, the frontend presents it as a proposal. If the relevant text has changed in
+the meantime, the user must explicitly decide whether to apply or discard the AI output. This is a
+reconcile-first design rather than a lock-first design.
+
+This choice is justified by the architectural drivers. Locking would be simpler to explain, but it would
+damage collaboration fluidity and create awkward waiting states. Reconciliation with explicit user review
+keeps the collaboration model more honest, even if it requires careful versioning and conflict-safe save
+behavior.
+
+\subsection{Prompt Design and Provider Strategy}
+
+Prompts are task-specific and template-based. The frontend chooses the user-facing action
+(rewrite/summarize/translate), while the backend/provider layer is responsible for constructing the final
+provider request. This keeps prompt construction out of the browser and allows prompt logic or provider
+selection to evolve without changing the frontend contract.
+
+The delivered MVP uses a provider abstraction with two concrete modes:
+
+\begin{itemize}
+  \item \texttt{stub}: a deterministic provider used for reliable demos and tests,
+  \item \texttt{lmstudio}: a local OpenAI-compatible provider used when a real local model endpoint is
+  available.
+\end{itemize}
+
+This is a pragmatic compromise between the architectural goal of AI usefulness and the assignment's need
+for repeatable demonstrations.
+
+\subsection{Async Job Model}
+
+AI operations are modeled as asynchronous jobs. The backend validates access, policy, quota, and input
+shape, creates a job record, and returns quickly with \texttt{jobId}, \texttt{statusUrl}, and an initial
+status. The frontend polls until the job reaches \texttt{SUCCEEDED} or \texttt{FAILED}. This model avoids
+blocking request threads and gives the client a precise way to distinguish “still running” from “failed”
+and “succeeded.”
+
+\section{API Design}
+
+The API style follows a hybrid model:
+
+\begin{itemize}
+  \item \textbf{REST} for CRUD, permissions, versions, exports, AI jobs, and session issuance,
+  \item \textbf{WebSocket + Yjs} for low-latency collaborative state propagation,
+  \item \textbf{Polling} from the frontend only for long-running AI jobs and export jobs.
+\end{itemize}
+
+This division is deliberate. REST keeps persistence-oriented operations predictable and easy to test.
+Realtime collaboration is handled by a dedicated push channel because document editing is inherently a
+shared live interaction. Long-running AI and export operations fit naturally into job-based REST flows.
+
+\subsection{Core API Contracts}
+
+The assignment brief requires at least document CRUD, realtime session management, AI invocation, and
+user/permission management. The delivered backend provides these contracts concretely and documents them
+through OpenAPI and contract notes in the repository.
+
+\begin{table}[H]
+\centering
+\caption{Core REST contract families used by the MVP}
+\label{tab:core-api-families}
+\begin{tabularx}{\textwidth}{p{3.8cm}X}
+\toprule
+\textbf{API family} & \textbf{Concrete delivered endpoints} \\
+\midrule
+Authentication & \texttt{POST /auth/login}, \texttt{GET /health} \\
+Document lifecycle & \texttt{POST /documents}, \texttt{GET /documents/:documentId}, \texttt{PUT /documents/:documentId/content} \\
+Versioning & \texttt{GET /documents/:documentId/versions}, \texttt{POST /documents/:documentId/revert} \\
+Permissions and AI policy & \texttt{GET/PUT/DELETE /documents/:documentId/permissions}, \texttt{GET/PUT /documents/:documentId/ai-policy} \\
+Realtime session management & \texttt{POST /sessions} \\
+AI jobs & \texttt{POST /ai/rewrite}, \texttt{POST /ai/summarize}, \texttt{POST /ai/translate}, \texttt{GET /ai/jobs/:jobId} \\
+Export jobs & \texttt{POST /documents/:documentId/export}, \texttt{GET /exports/:jobId}, \texttt{GET /exports/:jobId/download} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+All non-2xx responses use a shared JSON error shape:
+
+\begin{quote}
+\texttt{\{ "error": \{ "code": "<CODE>", "message": "<MESSAGE>", "details": \{ ...optional... \} \} \}}
+\end{quote}
+
+This is important because the assignment brief explicitly asks how the client can distinguish between AI
+latency, AI failure, quota issues, permission problems, and not-found conditions. The standard error
+schema gives the frontend a uniform contract for all of those cases.
+
+Representative delivered contracts are shown below.
+
+\paragraph{Document create}
+\begin{lstlisting}[language={}]
+POST /documents
+
+Request JSON:
+{ "title": "Project brief", "content": "Initial content" }
+
+Response JSON (201):
+{
+  "documentId": "doc_123",
+  "title": "Project brief",
+  "ownerId": "user_1",
+  "createdAt": "ISO-8601",
+  "updatedAt": "ISO-8601",
+  "currentVersionId": "ver_1"
+}
+\end{lstlisting}
+
+\paragraph{Document load}
+\begin{lstlisting}[language={}]
+GET /documents/:documentId
+
+Response JSON (200):
+{
+  "documentId": "doc_123",
+  "title": "Project brief",
+  "content": "Latest text",
+  "updatedAt": "ISO-8601",
+  "currentVersionId": "ver_3",
+  "role": "editor",
+  "revisionId": "rev_3"
+}
+\end{lstlisting}
+
+\paragraph{Realtime session issuance}
+\begin{lstlisting}[language={}]
+POST /sessions
+
+Request JSON:
+{ "documentId": "doc_123" }
+
+Response JSON (200):
+{
+  "sessionId": "sess_123",
+  "wsUrl": "ws://localhost:3001/ws?token=...",
+  "role": "viewer|editor|owner"
+}
+\end{lstlisting}
+
+\paragraph{AI rewrite invocation}
+\begin{lstlisting}[language={}]
+POST /ai/rewrite
+
+Request JSON:
+{
+  "documentId": "doc_123",
+  "selection": { "start": 0, "end": 25 },
+  "selectedText": "Original selected text",
+  "contextBefore": "",
+  "contextAfter": " remaining content",
+  "instruction": "Make this more concise",
+  "baseVersionId": "ver_3",
+  "requestId": "req_ai_001"
+}
+
+Response JSON (202):
+{
+  "jobId": "aijob_123",
+  "statusUrl": "/ai/jobs/aijob_123",
+  "status": "PENDING"
+}
+\end{lstlisting}
+
+\paragraph{AI job polling}
+\begin{lstlisting}[language={}]
+GET /ai/jobs/:jobId
+
+Response JSON (200):
+{
+  "jobId": "aijob_123",
+  "statusUrl": "/ai/jobs/aijob_123",
+  "status": "SUCCEEDED",
+  "proposedText": "Rewritten text",
+  "baseVersionId": "ver_3",
+  "createdAt": "ISO-8601",
+  "updatedAt": "ISO-8601"
+}
+\end{lstlisting}
+
+\paragraph{Permission grant}
+\begin{lstlisting}[language={}]
+PUT /documents/:documentId/permissions
+
+Request JSON:
+{ "requestId": "req_perm_001", "targetUserId": "user_2", "role": "editor" }
+
+Response JSON (200):
+{ "documentId": "doc_123", "targetUserId": "user_2", "role": "editor", "updatedAt": "ISO-8601" }
+\end{lstlisting}
+
+\subsection{Authentication and Authorization}
+
+The target architecture includes an external identity provider, but the delivered MVP uses an explicit
+local login flow backed by bearer tokens. The backend nevertheless enforces the same high-level concerns
+that would remain in a production system: authentication gates protected resources, authorization is
+document-scoped, and the UI is not treated as the source of truth.
+
+\input{tables/role-matrix}
+
+\implementationnote{The delivered system fully demonstrates owner/editor/viewer behavior. “Admin” is
+kept as a design-level role in the report because it remains meaningful for future policy and
+organization-level control, but the MVP's primary demonstrated management path is document ownership.}
+
+\subsection{Communication Model}
+
+The communication model is intentionally hybrid.
+
+\begin{itemize}
+  \item \textbf{Document open flow.} The frontend first loads a document snapshot through REST and then
+  requests a signed realtime session URL from the backend.
+  \item \textbf{Live collaboration.} The realtime service validates the signed session token and relays Yjs
+  sync and awareness updates among collaborators.
+  \item \textbf{Disconnect behavior.} If realtime becomes unavailable, the frontend falls back to offline/manual-save mode.
+  \item \textbf{AI completion.} AI uses async jobs with polling instead of websocket completion events in
+  the MVP because the job semantics are easier to reason about and test.
+\end{itemize}
+
+Additional sequence-diagram artifacts for document-open/realtime-join and AI-job execution are included
+in the repository's editable Mermaid sources, but omitted from the main PDF to keep the report focused on
+the assignment's required C4 and ER views.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{c4-level-2-container.png}
+  \caption{Runtime containers involved in document open and collaboration sync}
+  \label{fig:seq-open-sync}
+\end{figure}
+
+\implementationnote{The delivered system uses Yjs over WebSocket for text synchronization and presence.
+Polling is used only for async AI jobs and export jobs, and internally for backend-driven permission/
+revert event delivery to realtime rooms. It is not used to poll text diffs every second.}
+
+\section{Code Structure and Repository Organization}
+
+The final repository intentionally uses a monorepo. For a four-person academic team with strongly
+connected frontend, backend, realtime, and AI layers, a monorepo reduces coordination overhead and makes
+contract drift easier to detect.
+
+\subsection{Top-Level Layout}
+
+\begin{lstlisting}[basicstyle=\ttfamily\small]
+collaborative-editor-ai/
++-- frontend/        React + TypeScript client
++-- backend/         Express API, SQLite persistence, RBAC, AI jobs, export
++-- realtime/        WebSocket + Yjs relay service
++-- ai-service/      AI provider abstraction and prompt execution
++-- shared/          shared contracts such as session token signing
++-- docs/            architecture notes, Mermaid sources, diagram exports
++-- scripts/         root install/dev/test/demo orchestration
++-- tests/           root integration smoke tests
+`-- final-report/    final written submission package
+\end{lstlisting}
+
+\subsection{Shared Code and Config}
+
+The shared layer is intentionally narrow. It contains only cross-service helpers that justify shared
+ownership, such as session-token signing/verification. This avoids over-abstracting everything into a
+shared package while still keeping critical contracts consistent. Configuration is managed through
+environment variables and \texttt{.env.example} files; secrets are excluded from version control.
+
+\subsection{Testing Structure}
+
+The repository uses layered testing rather than relying on only one type of test.
+
+\begin{itemize}
+  \item Backend: unit/integration tests with Node's built-in test runner
+  \item Frontend: component/integration-style tests with Vitest
+  \item Realtime: websocket/Yjs integration tests with Node's built-in test runner
+  \item Root: a smoke integration test that starts backend and realtime together and validates wiring
+\end{itemize}
+
+This structure mirrors the feature decomposition: REST, realtime, and UI are each tested in their own
+layer, and the root smoke test catches cross-service drift.
+
+\section{Data Model}
+
+Figure~\ref{fig:er-model} shows the core entity relationships. The design centers on documents, users,
+permissions, versions, and AI interactions, but the delivered MVP also persists AI policy, export jobs,
+realtime events, audit logs, and idempotency keys to make the runtime predictable and observable.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.96\textwidth]{er-data-model.png}
+  \caption{Entity-relationship diagram for the collaborative editor domain}
+  \label{fig:er-model}
+\end{figure}
+
+\implementationnote{The delivered schema uses SQLite and includes implementation-supporting entities
+such as AI policy, export jobs, realtime events, audit logs, and idempotency keys in addition to the
+core design entities. This keeps the delivered MVP honest about the data required to support jobs,
+permissions, versioning, and collaboration behavior.}
+
+\section{Architecture Decision Records}
+
+\subsection*{ADR-001 --- Realtime consistency strategy}
+\textbf{Status:} Accepted.\\
+\textbf{Context:} The system needs simultaneous editing, reconnect safety, and convergence without the
+team implementing a custom operational transform algorithm.\\
+\textbf{Decision:} Use a CRDT-based collaboration approach built on Yjs, with the realtime service acting
+as a relay and permission gate rather than a custom transform engine.\\
+\textbf{Consequences:} This improves convergence and offline/reconnect resilience, but requires careful
+handling of room lifecycle, awareness state, and persistence boundaries.\\
+\textbf{Alternatives considered:} Custom OT server logic, naive last-write-wins, and polling-based text
+sync were rejected due to complexity or poor correctness.
+
+\subsection*{ADR-002 --- API style and async job model}
+\textbf{Status:} Accepted.\\
+\textbf{Context:} The system mixes CRUD-like document operations with long-running AI and export actions.\\
+\textbf{Decision:} Use REST for document, permission, version, AI job, export job, and session endpoints;
+use WebSocket for realtime collaboration; and model AI/export as asynchronous jobs.\\
+\textbf{Consequences:} The API is concrete and testable, but the frontend must poll job status and the
+backend must persist job state.\\
+\textbf{Alternatives considered:} synchronous AI calls, GraphQL for all interactions, and polling for live
+collaboration were rejected.
+
+\subsection*{ADR-003 --- Repository structure strategy}
+\textbf{Status:} Accepted.\\
+\textbf{Context:} The team needed a code structure that matched a multi-service system while minimizing
+coordination overhead for a small academic group.\\
+\textbf{Decision:} Use a monorepo with service directories and keep persistence logic grouped by domain
+repositories rather than a single giant application repository file.\\
+\textbf{Consequences:} Shared contracts are easier to keep aligned, but discipline is required to prevent
+tight coupling.\\
+\textbf{Alternatives considered:} separate repositories and hybrid split-repo models were rejected due to
+contract drift and coordination cost.
+
+\subsection*{ADR-004 --- AI provider strategy}
+\textbf{Status:} Accepted.\\
+\textbf{Context:} The system needs rewrite, summarize, and translate behaviors that are useful during a
+demo but not dependent on an always-available external cloud provider.\\
+\textbf{Decision:} Keep AI behind a provider abstraction supporting a deterministic stub mode and a local
+LM Studio/OpenAI-compatible mode.\\
+\textbf{Consequences:} Demo reliability improves and tests remain deterministic, but the system is still
+architected so a different provider can be added later.\\
+\textbf{Alternatives considered:} hard-wiring one hosted provider or requiring self-hosted production-scale
+model infrastructure for the MVP.

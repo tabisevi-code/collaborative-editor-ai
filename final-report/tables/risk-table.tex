@@ -1,0 +1,17 @@
+\begin{longtable}{p{3.1cm}p{1.8cm}p{3.0cm}p{4.6cm}p{3.8cm}}
+\caption{Technical risk assessment}\label{tab:risk-assessment}\\
+\toprule
+\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} & \textbf{Contingency} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Risk} & \textbf{Likelihood} & \textbf{Impact} & \textbf{Mitigation} & \textbf{Contingency} \\
+\midrule
+\endhead
+Realtime sync divergence or duplicate updates & Medium & Conflicting document views, lost trust in collaboration demo & Use Yjs instead of a custom algorithm, centralize realtime tests, preserve room state across reconnects, regression test save/reconnect paths & Fall back to manual save mode and present conflict-safe reload if realtime becomes unstable \\
+AI provider latency, outage, or malformed responses & High & AI actions stall or fail during demo & Async job model, provider abstraction, deterministic stub fallback, timeout/error mapping tests & Switch demo provider to stub and keep editing workflow available \\
+Backend and realtime configuration drift & Medium & Auth/session failures and invisible data mismatch across services & Shared root scripts, shared realtime secret, shared SQLite path, Docker Compose configuration & Reset with \texttt{npm run demo:reset} and verify health/docs endpoints before demo \\
+Permission enforcement gaps between REST and realtime & Medium & Unauthorized edits or inconsistent collaboration behavior & Server-side RBAC on every REST route and websocket write path, viewer rejection tests, permission update events & Downgrade affected users to viewer mode and block live editing until policy is revalidated \\
+Document-report divergence late in the semester & High & Lost marks despite working code & Keep architecture notes, OpenAPI, Mermaid sources, and final report in version control; explicitly document MVP deviations & Add a final alignment appendix and demo checklist so reviewers can map code to report claims quickly \\
+\bottomrule
+\end{longtable}

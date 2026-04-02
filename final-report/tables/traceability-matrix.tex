@@ -1,0 +1,27 @@
+\begin{landscape}
+\begin{longtable}{p{3.4cm}p{5.6cm}p{8.2cm}}
+\caption{Requirements traceability matrix}\label{tab:traceability}\\
+\toprule
+\textbf{User Story} & \textbf{Functional Requirement ID(s)} & \textbf{Architecture Component(s)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{User Story} & \textbf{Functional Requirement ID(s)} & \textbf{Architecture Component(s)} \\
+\midrule
+\endhead
+US-01 Offline reconnect & FR-COL-002, FR-COL-003, FR-DOC-003, FR-USER-005 & Frontend, Realtime Service, Backend API, Database \\
+US-02 Simultaneous edit conflict & FR-COL-003, FR-DOC-003, FR-DOC-004 & Frontend, Realtime Service, Backend API, Database \\
+US-03 AI partial accept & FR-AI-001, FR-AI-002, FR-DOC-004 & Frontend, AI Integration Service, Backend API, Database \\
+US-04 AI quota exceeded & FR-AI-003, FR-USER-006 & Backend API, AI Integration Service \\
+US-05 Viewer tries to edit & FR-USER-001, FR-USER-002, FR-USER-005, FR-USER-007, FR-DOC-002 & Frontend, Backend API, Realtime Service \\
+US-06 Share document with read-only access & FR-USER-003, FR-DOC-002, FR-USER-004 & Frontend, Backend API, Database \\
+US-07 AI rewrite during active collaboration & FR-AI-001, FR-AI-003, FR-COL-003 & Frontend, AI Integration Service, Realtime Service, Backend API \\
+US-08 Revert to previous version during collaboration & FR-DOC-006, FR-DOC-005, FR-DOC-004 & Backend API, Realtime Service, Database \\
+US-09 AI suggestion rejected & FR-AI-002, FR-AI-003 & Frontend, AI Integration Service, Backend API \\
+US-10 Admin disables AI features & FR-USER-006 & Backend API, AI Integration Service \\
+US-11 Create document & FR-DOC-001 & Frontend, Backend API, Database \\
+US-12 Export document & FR-DOC-007, FR-DOC-008 & Backend API, Database \\
+US-13 AI summarize and translate & FR-AI-004, FR-AI-005 & Frontend, AI Integration Service, Backend API \\
+\bottomrule
+\end{longtable}
+\end{landscape}

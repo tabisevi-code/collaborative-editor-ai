@@ -1,0 +1,608 @@
+\part{Requirements Engineering}
+
+\chapter{Requirements Engineering}
+
+This chapter translates the assignment brief into a structured requirements specification for the
+collaborative editor system. The intent is to describe not only the feature surface, but also the
+measurable quality constraints that shaped the final architecture and MVP implementation.
+
+\section{Stakeholder Analysis}
+
+The assignment explicitly asks for stakeholder categories beyond the generic “end user.” The final
+system is influenced by actors across the entire product lifecycle, including security, deployment,
+operations, and the economics of AI integration.
+
+\begin{table}[H]
+\centering
+\caption{Stakeholder analysis}
+\label{tab:stakeholders}
+\begin{tabularx}{\textwidth}{p{2.5cm}X X X}
+\toprule
+\textbf{Stakeholder} & \textbf{Goals} & \textbf{Concerns} & \textbf{Design Influence} \\
+\midrule
+Administrators / team leads & Control access, sharing, and AI usage policies across documents and collaborators & Unauthorized edits, accidental sharing, excessive AI cost, lack of auditability & Drive RBAC, permission workflows, version history, revert, AI policy controls, and audit logging \\
+Infrastructure / operations team & Keep services reproducible, testable, observable, and easy to deploy locally & Runtime drift, broken environments, fragile demos, unclear service boundaries & Drive Docker Compose, CI, root orchestration scripts, shared config, and simple deployable service boundaries \\
+AI provider / model platform & Receive valid requests, maintain predictable quotas, and avoid harmful or oversized prompts & Expensive requests, privacy leakage, malformed payloads, latency spikes, and unavailable model endpoints & Drive async AI jobs, prompt scoping to selected text, quota controls, error handling, and the stub/LM Studio provider abstraction \\
+Development team & Maintain a modular codebase that multiple people can extend safely over the semester & Tight coupling, duplicated logic, fragile contracts, and hard-to-debug collaboration bugs & Drive monorepo structure, shared contracts, repository split by domain, test coverage, and ADR documentation \\
+Document owners / collaborators & Edit, share, review, and recover document state with minimal friction & Lost edits, confusing permissions, broken collaboration, and untrustworthy AI suggestions & Drive live collaboration, autosave, revert, partial AI apply, visibility into roles, and graceful offline/manual-save fallback \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Functional Requirements}
+
+Each capability area is described first by a high-level capability statement and then by precise,
+testable sub-requirements with triggers, system behavior, and acceptance criteria.
+
+\subsection{Real-Time Collaboration}
+
+\textbf{High-level capability statement.} The system shall support real-time collaborative editing
+where multiple authenticated users can open the same document, observe each other's presence, and
+converge on a consistent shared document state without manual refreshes.
+
+\paragraph{FR-COL-001 --- Session Join and Presence Broadcast}
+\textbf{Description.} The system shall establish a collaboration session and broadcast presence when a
+user opens a shared document.\\
+\textbf{Trigger.} A permitted user opens a document and the frontend requests a collaboration session.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item The frontend loads the document over REST and requests a signed session from the backend.
+  \item The realtime service validates the signed session and joins the client to the document room.
+  \item Other collaborators receive presence/awareness updates within the collaboration channel.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item A successful join returns a valid session and role for the document.
+  \item Existing collaborators observe the new participant in the presence layer within one second.
+  \item Joining does not require a full page refresh when the user already has a valid document URL.
+\end{itemize}
+
+\paragraph{FR-COL-002 --- Session Leave, Disconnect Detection, and Reconnect}
+\textbf{Description.} The system shall degrade gracefully when a realtime connection is lost and resume
+collaboration when it is restored.\\
+\textbf{Trigger.} The browser loses websocket connectivity, the user closes a tab, or the realtime
+service becomes unavailable temporarily.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item The frontend detects the broken realtime connection and switches into an offline/manual-save
+  mode without losing visible local edits.
+  \item The realtime client retries connection automatically.
+  \item On reconnect, the client resynchronizes using the collaboration session model instead of
+  silently overwriting newer persisted content.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Connectivity loss is reflected in the UI within 2--10 seconds, depending on the failure mode.
+  \item The user can continue editing locally while realtime is unavailable.
+  \item When realtime returns, the client reconnects without requiring a full app restart in normal cases.
+\end{itemize}
+
+\paragraph{FR-COL-003 --- Real-Time Text Synchronization and Convergence}
+\textbf{Description.} The system shall propagate text updates among collaborators with deterministic
+convergence semantics.\\
+\textbf{Trigger.} An editor inserts, deletes, or replaces document text during an active session.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item The initiating client updates local editor state immediately.
+  \item The realtime layer relays Yjs synchronization updates to other participants.
+  \item All connected collaborators converge to the same logical document state.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Remote collaborators observe the update within the target latency budget under normal network conditions.
+  \item Simultaneous edits do not silently discard one collaborator's changes.
+  \item All connected clients converge to the same content after the final update is applied.
+\end{itemize}
+
+\paragraph{FR-COL-004 --- Presence, Cursor, and Selection Awareness}
+\textbf{Description.} The system shall communicate which collaborators are online and where their focus is.\\
+\textbf{Trigger.} A collaborator moves the cursor, updates a text selection, or joins/leaves the room.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item The frontend sends awareness metadata over the realtime channel.
+  \item Other clients render identifiable collaborator presence and selection state.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Presence indicators remain distinguishable when multiple collaborators are online.
+  \item Anonymous awareness records are not rendered as fake users.
+  \item Presence updates do not block typing or document rendering.
+\end{itemize}
+
+\paragraph{FR-COL-005 --- Role-Based Edit Enforcement in Collaboration}
+\textbf{Description.} The system shall block unauthorized collaborative writes while allowing read-only
+participants to remain in the session.\\
+\textbf{Trigger.} A viewer or revoked collaborator attempts to send an edit operation.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item The realtime service checks the current role before accepting write operations.
+  \item Viewers continue receiving document and presence updates, but their edits are rejected.
+  \item Role changes take effect without restarting services.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Viewer write attempts do not modify shared document state.
+  \item Authorized editor operations are accepted and propagated.
+  \item Permission changes affect collaboration behavior promptly.
+\end{itemize}
+
+\subsection{Document Management}
+
+\textbf{High-level capability statement.} The system shall manage the full document lifecycle ---
+creation, retrieval, persistence, versioning, revert, and export --- while preserving correctness under
+concurrent collaboration and enforcing role-based access control.
+
+\paragraph{FR-DOC-001 --- Create Document}
+\textbf{Description.} The system shall allow an authenticated user to create a new document with initial
+content and ownership metadata.\\
+\textbf{Trigger.} A signed-in user clicks \emph{New Document} or submits a create request.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate authentication and request payload.
+  \item Create a unique \texttt{documentId}, timestamps, and an initial version entry.
+  \item Assign the requester as the owner.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Returns \texttt{201} with \texttt{documentId}, \texttt{title}, \texttt{ownerId}, \texttt{createdAt}, \texttt{updatedAt}, and \texttt{currentVersionId}.
+  \item Invalid input returns \texttt{400 INVALID\_INPUT}.
+  \item Unauthenticated requests return \texttt{401 AUTH\_REQUIRED}.
+\end{itemize}
+
+\paragraph{FR-DOC-002 --- Retrieve Document with Permission Enforcement}
+\textbf{Description.} The system shall return document content and metadata only to authorized users.\\
+\textbf{Trigger.} A client requests \texttt{GET /documents/:documentId}.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Authenticate the request.
+  \item Resolve the document-scoped role.
+  \item Return the latest persisted content, version marker, and caller role.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Authorized users receive \texttt{200} with \texttt{documentId}, \texttt{title}, \texttt{content}, \texttt{updatedAt}, \texttt{currentVersionId}, \texttt{role}, and \texttt{revisionId}.
+  \item Unauthorized access returns a consistent \texttt{403 PERMISSION\_DENIED} or \texttt{404 NOT\_FOUND} policy.
+\end{itemize}
+
+\paragraph{FR-DOC-003 --- Update Document Content with Idempotent Save}
+\textbf{Description.} Editors and owners shall be able to persist content using idempotent request IDs.\\
+\textbf{Trigger.} The frontend performs manual save or autosave.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate authentication, authorization, payload size, and request ID.
+  \item If the request ID has already succeeded, return the stable previous success response.
+  \item Otherwise, persist the content and produce a new revision marker.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Viewers receive \texttt{403 PERMISSION\_DENIED}.
+  \item Repeated requests with the same request ID do not create duplicate state.
+  \item Successful saves return \texttt{200} with \texttt{documentId}, \texttt{updatedAt}, and \texttt{revisionId}.
+\end{itemize}
+
+\paragraph{FR-DOC-004 --- Version Snapshot Policy}
+\textbf{Description.} The system shall create immutable snapshots to support auditability and rollback.\\
+\textbf{Trigger.} Document creation, content persistence, revert, and AI-apply operations.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Create an initial version at document creation time.
+  \item Create version snapshots for saves and before destructive or AI-driven changes.
+  \item Preserve monotonically increasing version numbers per document.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Every document has at least one version.
+  \item Versions are immutable once written.
+  \item Revert and AI apply produce additional version entries rather than rewriting history.
+\end{itemize}
+
+\paragraph{FR-DOC-005 --- List Version History}
+\textbf{Description.} The system shall allow authorized users to browse version history without loading
+every full snapshot by default.\\
+\textbf{Trigger.} A client requests \texttt{GET /documents/:documentId/versions}.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Authenticate and authorize as viewer or above.
+  \item Return version metadata sorted newest-first.
+  \item Support pagination through limit and cursor.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item The response includes \texttt{versionId}, \texttt{versionNumber}, \texttt{createdAt}, \texttt{createdBy}, and \texttt{reason}.
+  \item Default history responses exclude full version content.
+\end{itemize}
+
+\paragraph{FR-DOC-006 --- Revert to Version}
+\textbf{Description.} The system shall revert a document to a prior version while preserving an audit trail.\\
+\textbf{Trigger.} The owner selects \emph{Revert} on a version history entry.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate authorization for revert.
+  \item Create a pre-revert backup snapshot.
+  \item Replace current content with the selected version's content.
+  \item Create a new version entry representing the revert.
+  \item Notify active realtime sessions so collaborators converge.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Revert creates a new version instead of overwriting history.
+  \item Non-existent target versions return \texttt{404 VERSION\_NOT\_FOUND}.
+  \item Unauthorized revert attempts return \texttt{403 PERMISSION\_DENIED}.
+\end{itemize}
+
+\paragraph{FR-DOC-007 --- Export Document}
+\textbf{Description.} The system shall support lightweight synchronous exports and heavier asynchronous export jobs.\\
+\textbf{Trigger.} A user selects an export format in the UI.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate access rights.
+  \item Return immediate metadata for lightweight exports.
+  \item Return an export job for heavier formats when necessary.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Lightweight exports return success synchronously.
+  \item Async exports return \texttt{202} with \texttt{jobId} and \texttt{statusUrl}.
+  \item Download metadata includes an expiry boundary.
+\end{itemize}
+
+\paragraph{FR-DOC-008 --- Audit Logging for Critical Document Actions}
+\textbf{Description.} The system shall persist an immutable audit record for critical document actions.\\
+\textbf{Trigger.} Create document, update permissions, revert, export, or apply/reject AI output.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Append an audit event with actor, document, action type, timestamp, and metadata.
+  \item Keep audit writes server-side and non-optional for the listed actions.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Audit events exist for the listed security-relevant actions.
+  \item The log is append-only from the standard application path.
+\end{itemize}
+
+\subsection{User Management and Authorization}
+
+\textbf{High-level capability statement.} The system shall authenticate users and enforce document-scoped
+authorization consistently across REST endpoints, realtime collaboration, AI usage, and sharing flows.
+
+\paragraph{FR-USER-001 --- Authenticate User and Establish Session}
+\textbf{Description.} The system shall authenticate a user and issue a token required for protected API access.\\
+\textbf{Trigger.} A user signs in via the frontend.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate the user identifier against the local MVP auth model.
+  \item Return bearer-token metadata and a minimal profile.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Successful auth returns \texttt{200} with \texttt{userId}, \texttt{displayName}, \texttt{accessToken}, and \texttt{expiresIn}.
+  \item Invalid credentials or malformed auth requests fail with a structured error.
+\end{itemize}
+
+\paragraph{FR-USER-002 --- Enforce Authorization on Every Protected Request}
+\textbf{Description.} The system shall enforce server-side authorization on all protected resources.\\
+\textbf{Trigger.} Any protected REST request for documents, versions, AI, permissions, export, or sessions.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate the bearer token.
+  \item Resolve document role and verify the requested action.
+  \item Deny unauthorized actions without side effects.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Missing or invalid auth returns \texttt{401}.
+  \item Forbidden actions return \texttt{403 PERMISSION\_DENIED}.
+  \item Server-side checks remain authoritative even if UI controls are hidden or bypassed.
+\end{itemize}
+
+\paragraph{FR-USER-003 --- Grant or Update Document Permissions}
+\textbf{Description.} Owners shall be able to grant or update collaborator roles on a document.\\
+\textbf{Trigger.} The owner submits a permission change request.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate that the target user and requested role are acceptable.
+  \item Create or update the document permission entry.
+  \item Emit audit and realtime state update signals.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Success returns \texttt{200} with \texttt{documentId}, \texttt{targetUserId}, \texttt{role}, and \texttt{updatedAt}.
+  \item Non-owner attempts fail with \texttt{403 PERMISSION\_DENIED}.
+\end{itemize}
+
+\paragraph{FR-USER-004 --- Revoke Document Access}
+\textbf{Description.} Owners shall be able to revoke a collaborator's access.\\
+\textbf{Trigger.} The owner removes a user from the share panel.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Remove the permission entry.
+  \item Emit an audit event and notify the realtime layer.
+  \item Deny further writes from the revoked user.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Revoked users lose access through subsequent REST or realtime operations.
+  \item Active realtime sessions are updated promptly.
+\end{itemize}
+
+\paragraph{FR-USER-005 --- Role-Based Editing Enforcement in Realtime Sessions}
+\textbf{Description.} Realtime collaboration shall enforce document roles, not just the REST layer.\\
+\textbf{Trigger.} A client sends a collaborative write frame over WebSocket.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate the signed session.
+  \item Map the session to the current document role.
+  \item Reject write operations from viewers.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Viewer edits do not affect the shared Yjs state.
+  \item Authorized editor writes propagate normally.
+\end{itemize}
+
+\paragraph{FR-USER-006 --- AI Policy Controls and Quota Enforcement}
+\textbf{Description.} The system shall support document-scoped AI policy controls and quota enforcement.\\
+\textbf{Trigger.} An owner changes AI policy or a user invokes an AI action.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Maintain document-level policy fields including AI enablement, allowed roles, and daily quota.
+  \item Enforce policy before dispatching AI requests.
+  \item Log AI usage for audit and cost tracking.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Disabled AI returns \texttt{403 AI\_DISABLED}.
+  \item Forbidden roles return \texttt{403 AI\_ROLE\_FORBIDDEN}.
+  \item Quota exhaustion returns \texttt{429 QUOTA\_EXCEEDED}.
+\end{itemize}
+
+\paragraph{FR-USER-007 --- Standard Error Response Schema}
+\textbf{Description.} All non-success API responses shall use a consistent JSON error contract.\\
+\textbf{Trigger.} Validation, authentication, authorization, quota, not-found, or processing failures.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Return \texttt{\{ error: \{ code, message, details? \} \}} consistently.
+  \item Keep machine-readable codes stable across endpoints.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item All non-2xx responses follow the standard error schema.
+  \item Shared error codes remain consistent across REST routes.
+\end{itemize}
+
+\subsection{AI Assistant}
+
+\textbf{High-level capability statement.} The system shall allow users to invoke AI assistance on
+selected text for rewrite, summarization, and translation workflows while preserving document control,
+cost visibility, and collaboration safety.
+
+\paragraph{FR-AI-001 --- Rewrite Selected Text}
+\textbf{Description.} The system shall create an asynchronous AI rewrite job for selected text.\\
+\textbf{Trigger.} An editor or owner selects text and invokes rewrite.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Validate permissions and quota.
+  \item Capture the selected text plus minimal surrounding context.
+  \item Create and run an async AI job.
+  \item Return a suggestion without modifying the document automatically.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Job creation returns quickly with \texttt{jobId} and \texttt{statusUrl}.
+  \item Original text remains unchanged until the user explicitly applies a suggestion.
+\end{itemize}
+
+\paragraph{FR-AI-002 --- Partial Acceptance of AI Suggestions}
+\textbf{Description.} Users shall be able to apply all or only part of an AI suggestion.\\
+\textbf{Trigger.} The user reviews a completed AI suggestion in the side panel.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Present the suggestion in an editable review panel.
+  \item Allow the user to apply the entire suggestion or only a selected portion.
+  \item Create AI-related version snapshots before persistence.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Partial acceptance replaces only the selected region in the current document range.
+  \item Applying AI creates additional version records for traceability.
+\end{itemize}
+
+\paragraph{FR-AI-003 --- AI Failure Handling}
+\textbf{Description.} AI failures shall be isolated so they never corrupt document state.\\
+\textbf{Trigger.} The provider times out, returns malformed output, or rejects a request.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Mark the job as failed.
+  \item Return a structured error state to the client.
+  \item Leave the document unchanged.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item Failures surface as \texttt{AI\_FAILED}, \texttt{AI\_TIMEOUT}, or \texttt{QUOTA\_EXCEEDED} rather than generic errors.
+  \item Retry does not corrupt document state.
+\end{itemize}
+
+\paragraph{FR-AI-004 --- Text Summarization}
+\textbf{Description.} The system shall summarize selected text as an asynchronous AI suggestion.\\
+\textbf{Trigger.} The user selects text and invokes summarize.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Send selected text and scoped context to the AI provider.
+  \item Return a summary suggestion that is not auto-applied.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item The summary is presented for review rather than applied directly.
+  \item The action follows the same async job contract as rewrite.
+\end{itemize}
+
+\paragraph{FR-AI-005 --- Text Translation}
+\textbf{Description.} The system shall translate selected text into a requested target language.\\
+\textbf{Trigger.} The user selects text, chooses a language, and invokes translate.\\
+\textbf{System behavior.}
+\begin{itemize}
+  \item Send the selected text and target language to the AI provider.
+  \item Return the translated result as a reviewable suggestion.
+\end{itemize}
+\textbf{Acceptance criteria.}
+\begin{itemize}
+  \item The translated output is not auto-applied.
+  \item The same error and quota semantics apply as for rewrite/summarize.
+\end{itemize}
+
+\section{Non-Functional Requirements}
+
+\subsection{Latency and Scalability}
+
+\begin{itemize}
+  \item \textbf{NFR-LS-001 --- Document open latency.} For documents up to 50 KB, the target p95 for
+  \texttt{GET /documents/:documentId} is $\leq 300$ ms, excluding client rendering.
+  \item \textbf{NFR-LS-002 --- Save latency.} For typical saves up to 10 KB, the target p95 for
+  \texttt{PUT /documents/:documentId/content} is $\leq 200$ ms, with idempotent replays returning even faster.
+  \item \textbf{NFR-LS-003 --- Realtime propagation.} Under normal network conditions, remote edit
+  propagation should remain in the 200--500 ms range, with presence/cursor updates remaining visually
+  responsive.
+  \item \textbf{NFR-LS-004 --- Version history latency.} History pages up to 200 versions should be
+  returned within $\leq 300$ ms p95 per page.
+  \item \textbf{NFR-LS-005 --- AI responsiveness.} AI job creation should return within $\leq 500$ ms,
+  while selection-based AI completion should remain within a usable 10-second target in normal local or
+  compatible-provider conditions.
+  \item \textbf{NFR-LS-006 --- Collaboration capacity.} The target architecture should support at least 25
+  connected users per document and at least 10 simultaneous editors. The delivered MVP is optimized for
+  correctness and demonstrability rather than load-tested production scale.
+\end{itemize}
+
+\subsection{Security, Availability, and Privacy}
+
+\begin{itemize}
+  \item \textbf{NFR-SAP-001 --- In-transit and at-rest protection.} The target architecture assumes secure
+  transport and encrypted persistence in production. The delivered MVP uses localhost HTTP/WebSocket and
+  SQLite for coursework scope and explicitly documents this simplification.
+  \item \textbf{NFR-SAP-002 --- Server-side enforcement.} All protected operations must validate bearer
+  authentication and document-scoped authorization on the server, not only in the UI.
+  \item \textbf{NFR-SAP-003 --- AI data minimization.} By default, only the selected text plus minimal
+  surrounding context is sent to the AI provider.
+  \item \textbf{NFR-SAP-004 --- Graceful AI degradation.} AI provider failures must not block editing,
+  collaboration, or export workflows.
+  \item \textbf{NFR-SAP-005 --- Auditability.} Sensitive actions such as permission changes, exports,
+  reverts, and AI feedback should create immutable server-side audit records.
+\end{itemize}
+
+\subsection{Usability and Accessibility}
+
+\begin{itemize}
+  \item \textbf{NFR-U-001 --- Collaborative clarity.} Presence indicators must remain understandable with
+  multiple users connected.
+  \item \textbf{NFR-U-002 --- AI suggestion readability.} AI suggestions must be visually separated from the
+  original content and easy to review or reject.
+  \item \textbf{NFR-U-003 --- Editing responsiveness.} Local typing should feel immediate and should not be
+  blocked by background synchronization or AI processing.
+  \item \textbf{NFR-U-004 --- Large-document usability.} The UI should remain interactive for typical
+  coursework-scale documents even when history, AI panels, and multiple collaborators are present.
+  \item \textbf{NFR-U-005 --- Error clarity.} Permission, quota, network, and conflict errors must give the
+  user a clear explanation and a sensible next action.
+\end{itemize}
+
+\section{User Stories and Scenarios}
+
+The system is driven by collaboration, AI, document lifecycle, and role-sensitive stories rather than a
+single-user editor mindset.
+
+\paragraph{US-01 Offline Reconnect} As an editor, I want to continue editing during a temporary loss of
+realtime connectivity and recover safely when collaboration resumes.
+\begin{itemize}
+  \item The editor must surface an offline/manual-save mode rather than pretending collaboration is still live.
+  \item On reconnect, the client should rejoin collaboration without silently overwriting newer persisted content.
+\end{itemize}
+
+\paragraph{US-02 Simultaneous Edit Conflict} As an editor, I want concurrent edits to converge predictably
+so that other users' changes do not silently overwrite my own.
+\begin{itemize}
+  \item Both collaborators' edits should survive normal concurrent editing.
+  \item The system should converge instead of forcing one user to refresh manually after every conflict.
+\end{itemize}
+
+\paragraph{US-03 AI Partial Accept} As an editor, I want to accept only a useful part of an AI suggestion
+so I can keep the good portion without applying everything.
+\begin{itemize}
+  \item The user must be able to apply all of the AI output or only a selected portion.
+  \item Applying AI should create traceable version snapshots rather than bypassing history.
+\end{itemize}
+
+\paragraph{US-04 AI Quota Exceeded} As a user, I want a clear quota-exceeded response so I understand why an
+AI action did not run.
+\begin{itemize}
+  \item Quota errors should be explicit rather than generic server failures.
+  \item Editing and collaboration should continue to work even when AI is denied.
+\end{itemize}
+
+\paragraph{US-05 Viewer Tries to Edit} As a viewer, I want the system to block editing gracefully while
+still allowing me to watch live updates.
+\begin{itemize}
+  \item The viewer UI must remain readable and collaborative, but write attempts must fail.
+  \item The same restriction must be enforced server-side and in realtime.
+\end{itemize}
+
+\paragraph{US-06 Share Document with Read-Only Access} As an owner, I want to grant read-only access so
+others can review without editing.
+\begin{itemize}
+  \item The owner must be able to grant or revoke viewer/editor access without restarting the system.
+  \item The target user should see the new role reflected in both REST and realtime behavior.
+\end{itemize}
+
+\paragraph{US-07 AI Rewrite During Active Collaboration} As an editor, I want to request an AI rewrite
+without freezing the whole document for other collaborators.
+\begin{itemize}
+  \item The AI should run against a snapshot while collaborators continue editing.
+  \item The returned suggestion should be reviewable rather than auto-applied into a moving document.
+\end{itemize}
+
+\paragraph{US-08 Revert to Previous Version During Collaboration} As an owner, I want to revert safely and
+bring all collaborators to the reverted state.
+\begin{itemize}
+  \item Revert must create a new version rather than destroying history.
+  \item Active collaborators should converge to the reverted state through the realtime layer.
+\end{itemize}
+
+\paragraph{US-09 AI Suggestion Rejected} As an editor, I want to reject an AI suggestion without changing
+document content.
+\begin{itemize}
+  \item Rejection should be immediate and should not alter the document or undo stack.
+  \item Rejection should still be visible in audit/feedback history.
+\end{itemize}
+
+\paragraph{US-10 Admin Disables AI Features} As a policy owner, I want to disable AI for a document or role
+so the system respects cost and privacy constraints.
+\begin{itemize}
+  \item AI-disallowed states should be enforced before any provider call is made.
+  \item The UI should explain that AI is disabled instead of silently hiding failure.
+\end{itemize}
+
+\paragraph{US-11 Create Document} As an authenticated user, I want to create a new document and become its
+owner immediately.
+\begin{itemize}
+  \item Creation should also initialize a first version snapshot and ownership record.
+  \item The frontend should redirect directly to the created document.
+\end{itemize}
+
+\paragraph{US-12 Export Document} As a collaborator with access, I want to export a document in a supported
+format for external sharing or review.
+\begin{itemize}
+  \item Lightweight formats may complete immediately; heavy formats should use an async job.
+  \item Export permissions must follow the same document role model as the rest of the system.
+\end{itemize}
+
+\paragraph{US-13 AI Summarize and Translate} As an editor, I want to summarize or translate selected text as
+reviewable suggestions.
+\begin{itemize}
+  \item The AI output should be shown for review rather than inserted automatically.
+  \item Both summarize and translate should follow the same async job and permission model as rewrite.
+\end{itemize}
+
+\section{Requirements Traceability}
+
+The traceability matrix in Table~\ref{tab:traceability} links the user stories above to the functional
+requirements and then to the architectural components that implement them. This matrix was maintained as
+an explicit anti-drift artifact because the MVP evolved significantly beyond the initial PoC baseline.
+
+\input{tables/traceability-matrix}

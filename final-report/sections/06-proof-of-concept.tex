@@ -1,0 +1,120 @@
+\part{Proof of Concept and Delivered MVP}
+
+\chapter{Proof of Concept}
+
+The assignment's proof-of-concept requirement is intentionally modest: demonstrate working frontend to
+backend communication, validate the core API data contract, and organize the repository according to the
+architecture. The delivered system satisfies that minimum while going beyond it.
+
+\section{PoC Minimum Expected by the Assignment}
+
+The brief requires three core things:
+
+\begin{enumerate}
+  \item a working frontend with a visible editing page,
+  \item at least one meaningful API call between frontend and backend,
+  \item request/response data contracts that match the architecture document.
+\end{enumerate}
+
+The delivered repository satisfies those requirements directly:
+
+\begin{itemize}
+  \item the frontend provides a working document editor interface,
+  \item the backend exposes concrete routes for document creation, loading, saving, permissions, AI,
+  sessions, versioning, revert, and export,
+  \item the documented contracts are represented by OpenAPI, contract notes, and automated tests.
+\end{itemize}
+
+\section{Delivered MVP Features Beyond the Minimum PoC}
+
+The final implementation goes well beyond the minimum PoC threshold while still preserving the same
+architectural skeleton. The delivered MVP includes:
+
+\begin{itemize}
+  \item a visible local login experience backed by \texttt{POST /auth/login},
+  \item local bearer-token login through \texttt{POST /auth/login},
+  \item live collaboration with Yjs over WebSocket,
+  \item autosave with idempotent backend persistence,
+  \item version history and revert,
+  \item document-scoped permissions and AI policy controls,
+  \item async AI jobs for rewrite, summarize, and translate,
+  \item partial AI acceptance,
+  \item synchronous and asynchronous export flows,
+  \item Swagger/OpenAPI docs at \texttt{/docs},
+  \item root commands for install, run, test, and deterministic demo reset,
+  \item Docker Compose and CI support.
+\end{itemize}
+
+\section{Repository and README Evidence}
+
+The assignment rubric explicitly checks whether the repository is organized according to the documented
+structure and whether a third party can run the system from the README. The delivered repository provides
+that through:
+
+\begin{itemize}
+  \item a monorepo matching the documented service decomposition,
+  \item root orchestration scripts: \texttt{install:all}, \texttt{dev:all}, \texttt{test:all},
+  and \texttt{demo:reset},
+  \item service-specific READMEs and a root README,
+  \item contract notes and OpenAPI for backend routes,
+  \item a deterministic smoke test that validates backend + realtime wiring.
+\end{itemize}
+
+\section{Verification Strategy}
+
+The delivered MVP demonstrates feasibility through both automated and manual validation.
+
+\begin{itemize}
+  \item Backend tests validate routing, auth, permissions, AI jobs, export, versions, and sessions.
+  \item Frontend tests validate API clients, realtime behavior, AI panel interactions, and document-page
+  workflows such as autosave and stale-save handling.
+  \item Realtime tests validate websocket session behavior, collaborative convergence, viewer rejection,
+  and revert propagation.
+  \item A root integration smoke test validates that backend and realtime services work together under a
+  shared SQLite state.
+\end{itemize}
+
+In addition, the live demo flow shows the user-facing proof that the architecture holds together:
+login, create a document, grant access to a second user, live collaboration, autosave, AI invocation,
+partial AI acceptance, version history, revert, export, and Swagger docs.
+
+\section{Running the AI Flow with LM Studio}
+
+The delivered MVP supports two AI-provider modes:
+
+\begin{itemize}
+  \item \texttt{stub}: deterministic demo-safe behavior with no external dependency,
+  \item \texttt{lmstudio}: a local OpenAI-compatible provider for a real model-backed experience.
+\end{itemize}
+
+For the strongest demo, LM Studio should be started before the application stack so the backend can use
+the real provider path.
+
+Recommended LM Studio setup for the delivered MVP:
+
+\begin{enumerate}
+  \item Open LM Studio.
+  \item Load a local model that supports the OpenAI-compatible chat-completions API.
+  \item Start the local server and keep it reachable at \texttt{http://127.0.0.1:1234}.
+  \item Verify that the model server responds at \texttt{/v1/models}.
+  \item Start the application with either:
+  \begin{itemize}
+    \item \texttt{npm run demo:reset} (auto-detects LM Studio when available), or
+    \item \texttt{AI\_PROVIDER=lmstudio npm run demo:reset} to force the LM Studio path.
+  \end{itemize}
+\end{enumerate}
+
+This design is intentional. The stub provider guarantees reliable demos and deterministic tests, while
+LM Studio demonstrates the same asynchronous AI workflow against a real local model endpoint without
+requiring a paid hosted provider.
+
+Practical verification commands are:
+
+\begin{lstlisting}[language={}]
+curl http://127.0.0.1:1234/v1/models
+AI_PROVIDER=lmstudio npm run demo:reset
+\end{lstlisting}
+
+If LM Studio is unavailable, the rest of the system --- editing, collaboration, versioning, permissions,
+and export --- still remains usable. Only the AI-generation path degrades, which is exactly the graceful
+failure behavior described in the architecture.

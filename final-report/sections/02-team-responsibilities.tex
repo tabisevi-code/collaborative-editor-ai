@@ -1,0 +1,62 @@
+\chapter{Team Responsibilities and Contributions}
+
+The assignment explicitly evaluates not just technical output, but also whether the team had clear
+ownership boundaries and a believable plan for cross-functional work. The project was therefore
+organized around service ownership with shared decision-making for cross-cutting flows such as AI,
+permissions, realtime collaboration, and versioning.
+
+\section{Ownership Model}
+
+\begin{table}[H]
+\centering
+\caption{Primary ownership and contribution areas}
+\label{tab:ownership}
+\begin{tabularx}{\textwidth}{p{2.4cm}p{4.4cm}X}
+\toprule
+\textbf{Member} & \textbf{Primary Ownership} & \textbf{Concrete Responsibilities} \\
+\midrule
+Tabina & Architecture and infrastructure & Architectural drivers, C4 level 1 and level 2 diagrams, feature decomposition, repository organization, methodology, milestone planning, final repository consistency \\
+Noel & Backend and API layer & Document management requirements, user management requirements, latency/scalability targets, C4 level 3 backend component view, API contracts, auth/authorization design, realtime feasibility, backend MVP implementation \\
+Nurtore & AI and data model & AI requirements, quota/failure handling, privacy and security NFRs, AI integration deep design, AI model strategy ADR, AI/data-model relationships \\
+Ming Ming & Frontend and UX & Collaboration requirements, usability NFRs, user stories, frontend PoC/MVP implementation, API usability validation, role-aware UX behavior \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Cross-Cutting Collaboration}
+
+Several major features deliberately crossed ownership boundaries.
+
+\begin{itemize}
+  \item \textbf{Realtime collaboration} required coordination between Ming Ming's frontend work,
+  Noel's backend contracts and permission model, and the dedicated realtime service design.
+  \item \textbf{AI assistance} touched frontend UX, backend policy enforcement, the AI provider
+  abstraction, the data model, and versioning logic.
+  \item \textbf{Permissions and sharing} required agreement between the frontend role UX, backend
+  RBAC enforcement, and realtime write restrictions.
+  \item \textbf{Final demo reliability} required infrastructure-oriented work such as shared runtime
+  configuration, root scripts, Docker Compose, CI, and deterministic reset behavior.
+\end{itemize}
+
+To avoid fragmented decision making, the team treated backend contracts, realtime behavior, and AI
+interaction flows as interface boundaries that had to be reviewed jointly. This mattered because the
+assignment's PoC requirement was not just “make something run,” but “make the code reflect the
+architecture document.” Shared ownership therefore meant aligning contracts and assumptions, not
+blurring responsibility.
+
+\section{Decision-Making Process}
+
+Technical disagreements were resolved with a bias toward the smallest correct design that preserved
+clarity, demo reliability, and grading alignment. In practice, the decision rule was:
+
+\begin{enumerate}
+  \item identify the architectural driver being optimized (correctness, latency, maintainability,
+  cost, or demo reliability),
+  \item prefer the approach that reduced implementation risk while still satisfying the assignment,
+  \item record the choice through an ADR when the trade-off affected multiple parts of the system.
+\end{enumerate}
+
+This is why the delivered MVP uses local bearer-token authentication rather than a full OAuth/OIDC
+ integration, SQLite rather than a larger operational database deployment, and a provider abstraction
+with a deterministic stub AI path for demos. These choices intentionally optimize feasibility and
+traceability without abandoning the target architecture described in the report.

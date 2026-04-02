@@ -1,0 +1,27 @@
+\chapter{Conclusion}
+
+This project demonstrates a coherent architecture for a collaborative editor with integrated AI support,
+and it validates that architecture through a working MVP rather than through diagrams alone. The final
+system delivers concrete value across the four assessed areas of the assignment:
+
+\begin{itemize}
+  \item \textbf{Requirements engineering:} the report defines functional and non-functional requirements,
+  user stories, and a traceability matrix that links user needs to implemented components.
+  \item \textbf{System architecture:} the C4 views, feature decomposition, API contracts, AI integration
+  design, data model, and ADRs explain both the structure and the reasoning behind key design choices.
+  \item \textbf{Project management:} ownership boundaries, workflow rules, risk handling, and milestones show
+  how the team could realistically build and evolve the system.
+  \item \textbf{Proof of concept:} the repository demonstrates working frontend-backend communication and, in
+  fact, goes beyond the minimum with live collaboration, permissions, AI jobs, autosave, versioning,
+  export, CI, and Docker-based runtime support.
+\end{itemize}
+
+The most important architectural theme throughout the project is deliberate simplification without loss of
+coherence. Local bearer-token authentication, SQLite, and the stub/LM Studio AI provider strategy are
+not signs of incomplete thinking; they are examples of choosing the smallest viable implementation that
+still preserves the essential structure and product behavior required by the assignment. The report
+therefore treats the delivered MVP honestly: it documents both the intended target architecture and the
+practical MVP simplifications, and it keeps those two perspectives connected rather than contradictory.
+
+That combination --- justified design, clear code structure, and a runnable MVP --- is what makes the
+system a strong foundation for the remainder of the semester.

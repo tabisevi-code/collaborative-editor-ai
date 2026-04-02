@@ -1,0 +1,59 @@
+flowchart LR
+    Client[Web Client / React]
+    Router[API Router / Controllers]
+    AuthMW[Auth Middleware\nBearer-token validation]
+    RBAC[Authorization / RBAC Policy]
+
+    DocSvc[Document Service]
+    VersionSvc[Version / Revert Logic]
+    PermissionSvc[Permission Service]
+    AISvc[AI Job Service]
+    ExportSvc[Export Job Service]
+    SessionSvc[Session Service]
+
+    UsersRepo[Users Repository]
+    DocsRepo[Documents Repository]
+    PermRepo[Permissions Repository]
+    AIRepo[AI / Policy Repository]
+    ExportRepo[Exports Repository]
+    Audit[Audit Logger]
+
+    DB[(SQLite Database)]
+    RT[Realtime Sync Service\nWebSocket / CRDT Gateway]
+    LLM[AI Provider / LLM API]
+    IdP[Identity Provider\nTarget architecture]
+
+    Client -->|REST routes| Router
+    Router --> AuthMW --> RBAC
+
+    Router --> DocSvc
+    Router --> VersionSvc
+    Router --> PermissionSvc
+    Router --> AISvc
+    Router --> ExportSvc
+    Router --> SessionSvc
+
+    DocSvc --> DocsRepo
+    DocSvc --> Audit
+    VersionSvc --> DocsRepo
+    VersionSvc --> Audit
+    VersionSvc --> RT
+    PermissionSvc --> PermRepo
+    PermissionSvc --> Audit
+    PermissionSvc --> RT
+    AISvc --> AIRepo
+    AISvc --> Audit
+    AISvc --> LLM
+    ExportSvc --> ExportRepo
+    ExportSvc --> Audit
+    SessionSvc --> DocsRepo
+    SessionSvc --> PermRepo
+    SessionSvc --> UsersRepo
+
+    UsersRepo --> DB
+    DocsRepo --> DB
+    PermRepo --> DB
+    AIRepo --> DB
+    ExportRepo --> DB
+    Audit --> DB
+    AuthMW -.-> IdP
