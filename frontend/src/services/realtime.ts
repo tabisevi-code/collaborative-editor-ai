@@ -117,6 +117,7 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
   let currentRole: DocumentRole = "viewer";
   let shouldReconnect = false;
   let collaborationReady = false;
+  let connectAttemptId = 0;
 
   function updateState(state: RealtimeConnectionState) {
     activeOptions?.onConnectionStateChange?.(state);
@@ -129,9 +130,13 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
         return;
       }
 
+      if (typeof state.userId !== "string" || state.userId.trim().length === 0) {
+        return;
+      }
+
       peers.push({
         clientId,
-        userId: typeof state.userId === "string" ? state.userId : `peer_${clientId}`,
+        userId: state.userId,
         color: typeof state.color === "string" ? state.color : derivePeerColor(String(state.userId || clientId)),
         role: state.role,
         cursor: typeof state.cursor === "number" ? state.cursor : null,
@@ -190,11 +195,13 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
     }
 
     const cursor = selection ? selection.end : null;
-    awareness.setLocalStateField("userId", activeOptions.userId);
-    awareness.setLocalStateField("color", derivePeerColor(activeOptions.userId));
-    awareness.setLocalStateField("role", currentRole);
-    awareness.setLocalStateField("cursor", cursor);
-    awareness.setLocalStateField("selection", selection);
+    awareness.setLocalState({
+      userId: activeOptions.userId,
+      color: derivePeerColor(activeOptions.userId),
+      role: currentRole,
+      cursor,
+      selection,
+    });
   }
 
   function resetDocumentContent(content: string, origin: unknown) {
@@ -224,6 +231,7 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
   }
 
   async function connect(documentId: string, options: RealtimeClientOptions) {
+    const attemptId = ++connectAttemptId;
     activeDocumentId = documentId;
     activeOptions = options;
     currentRole = options.role ?? "viewer";
@@ -246,6 +254,10 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
 
     try {
       const session = await apiClient.createSession(documentId, options.userId);
+      if (attemptId !== connectAttemptId) {
+        return;
+      }
+
       currentRole = session.role;
       options.onPermissionChange?.(session.role);
 
@@ -254,12 +266,20 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
       socket = ws;
 
       ws.onopen = () => {
+        if (socket !== ws || attemptId !== connectAttemptId) {
+          return;
+        }
+
         console.info("[frontend-realtime] socket_open", { documentId, userId: options.userId });
         sendSyncStep1();
         updateLocalAwareness(null);
       };
 
       ws.onmessage = (event) => {
+        if (socket !== ws || attemptId !== connectAttemptId) {
+          return;
+        }
+
         if (typeof event.data === "string") {
           const payload = JSON.parse(event.data) as JsonRealtimeMessage;
           if (payload.type === "session_ready") {
@@ -331,11 +351,19 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
       };
 
       ws.onerror = () => {
+        if (socket !== ws || attemptId !== connectAttemptId) {
+          return;
+        }
+
         updateState("error");
         options.onError?.("Realtime connection failed.");
       };
 
       ws.onclose = () => {
+        if (socket !== ws || attemptId !== connectAttemptId) {
+          return;
+        }
+
         socket = null;
         updateState("closed");
         emitPeers();
@@ -354,7 +382,7 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
   ydoc.on("update", (update, origin) => {
     activeOptions?.onTextChange?.(ytext.toString());
 
-    if (origin === LOCAL_TEXT_ORIGIN || origin === LOCAL_RESET_ORIGIN) {
+    if (origin === LOCAL_TEXT_ORIGIN) {
       const encoder = encoding.createEncoder();
       encoding.writeVarUint(encoder, MESSAGE_SYNC);
       syncProtocol.writeUpdate(encoder, update);

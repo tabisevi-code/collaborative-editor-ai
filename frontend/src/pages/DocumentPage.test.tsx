@@ -35,6 +35,7 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     requestSummarizeJob: vi.fn(),
     requestTranslateJob: vi.fn(),
     getAiJobStatus: vi.fn(),
+    recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
     getExportJobStatus: vi.fn(),
     downloadExport: vi.fn(),
@@ -50,7 +51,11 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <Routes>
-        <Route path="/documents/:documentId" element={<DocumentPage apiClient={apiClient} userId={userId} />} />
+        <Route path="/" element={<div>Home Route</div>} />
+        <Route
+          path="/documents/:documentId"
+          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={vi.fn()} />}
+        />
       </Routes>
     </MemoryRouter>
   );
@@ -174,7 +179,7 @@ describe("DocumentPage", () => {
     });
   });
 
-  it("shows a document not found banner for 404 errors", async () => {
+  it("redirects stale document URLs back home after a 404 load error", async () => {
     const apiClient = createApiClientMock({
       getDocument: vi.fn(async () => {
         throw new ApiError(404, "NOT_FOUND", "document not found");
@@ -184,7 +189,13 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
 
     await waitFor(() => {
-      expect(screen.getByText("Document not found.")).toBeInTheDocument();
+      expect(screen.getByText(/returning to the home page/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/go back home now/i));
+
+    await waitFor(() => {
+      expect(screen.getByText("Home Route")).toBeInTheDocument();
     });
   });
 
@@ -242,5 +253,60 @@ describe("DocumentPage", () => {
     await waitFor(() => {
       expect(mockRealtimeService.applyRemoteReset).toHaveBeenCalledWith("Fresh body");
     });
+  });
+
+  it("autosaves collaborative changes after a short debounce", async () => {
+    const apiClient = createApiClientMock({
+      getDocument: vi
+        .fn()
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Autosave Doc",
+          content: "Original body",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          currentVersionId: "ver_1",
+          role: "editor",
+          revisionId: "rev_1",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValue({
+          documentId: "doc_123",
+          title: "Autosave Doc",
+          content: "Autosaved draft",
+          updatedAt: "2026-04-02T00:05:00.000Z",
+          currentVersionId: "ver_2",
+          role: "editor",
+          revisionId: "rev_2",
+        } satisfies GetDocumentResponse),
+      updateDocument: vi.fn(async () => ({
+        documentId: "doc_123",
+        updatedAt: "2026-04-02T00:05:00.000Z",
+        revisionId: "rev_2",
+      })),
+    });
+
+    renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
+
+    await screen.findByDisplayValue("Original body");
+    await act(async () => {
+      options?.onTextChange?.("Autosaved draft");
+    });
+    mockRealtimeService.getText.mockReturnValue("Autosaved draft");
+
+    await waitFor(
+      () => {
+        expect(apiClient.updateDocument).toHaveBeenCalledWith(
+          "doc_123",
+          expect.objectContaining({
+            content: "Autosaved draft",
+            baseRevisionId: "rev_1",
+          }),
+          "user_1"
+        );
+      },
+      { timeout: 2500 }
+    );
+
+    expect(mockRealtimeService.connect).toHaveBeenCalledTimes(1);
   });
 });

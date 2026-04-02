@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AiAction, AiJobResponse } from "../types/api";
 import type { AiJobStatus, AiSelectionSnapshot, AiService } from "../services/ai";
 import { ApiError } from "../types/api";
+
+export interface AiApplyPayload {
+  text: string;
+  mode: "full" | "partial";
+  jobId: string | null;
+  targetSelection: AiSelectionSnapshot["selection"];
+}
 
 interface AiPanelProps {
   documentId: string;
   snapshot: AiSelectionSnapshot;
   selectedText: string;
   aiService: AiService;
-  onApply(text: string): void;
+  onApply(payload: AiApplyPayload): Promise<void> | void;
+  onReject(jobId: string | null): Promise<void> | void;
   onClose(): void;
 }
 
@@ -39,7 +47,7 @@ function formatJobStatus(status: AiJobStatus | null): string {
   return "Ready to run";
 }
 
-export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply, onClose }: AiPanelProps) {
+export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply, onReject, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
   const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error">("idle");
@@ -47,6 +55,15 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<AiJobStatus | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [editableSuggestion, setEditableSuggestion] = useState("");
+  const [suggestionSelection, setSuggestionSelection] = useState<{ start: number; end: number } | null>(null);
+  const suggestionRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const nextSuggestion = result?.output || result?.proposedText || "";
+    setEditableSuggestion(nextSuggestion);
+    setSuggestionSelection(null);
+  }, [result]);
 
   async function handleRun() {
     if (!selectedText.trim()) return;
@@ -97,15 +114,36 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
     }
   }
 
-  function handleApply() {
-    if (result?.output || result?.proposedText) {
-      onApply(result.output || result.proposedText || "");
-      onClose();
+  async function handleApply(mode: "full" | "partial") {
+    const nextText =
+      mode === "partial" && suggestionSelection && suggestionSelection.end > suggestionSelection.start
+        ? editableSuggestion.slice(suggestionSelection.start, suggestionSelection.end)
+        : editableSuggestion;
+
+    if (!nextText.trim()) {
+      setErrorMessage("AI suggestion is empty. Generate or edit a suggestion before applying it.");
+      setPhase("error");
+      return;
     }
+
+    await onApply({
+      text: nextText,
+      mode,
+      jobId,
+      targetSelection: snapshot.selection,
+    });
+    onClose();
+  }
+
+  async function handleReject() {
+    await onReject(jobId);
+    onClose();
   }
 
   const canRun = selectedText.trim().length > 0 && phase !== "loading";
-  const resultText = result?.output || result?.proposedText || "";
+  const hasPartialSelection = Boolean(
+    suggestionSelection && suggestionSelection.end > suggestionSelection.start && editableSuggestion.length > 0
+  );
 
   return (
     <>
@@ -130,7 +168,13 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
                 <button
                   key={a.value}
                   className={`ai-tab${action === a.value ? " active" : ""}`}
-                  onClick={() => { setAction(a.value); setPhase("idle"); setResult(null); }}
+                  onClick={() => {
+                    setAction(a.value);
+                    setPhase("idle");
+                    setResult(null);
+                    setEditableSuggestion("");
+                    setSuggestionSelection(null);
+                  }}
                 >
                   {a.emoji} {a.label}
                 </button>
@@ -189,7 +233,7 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
           )}
 
           {/* Result */}
-          {phase === "result" && resultText && (
+          {phase === "result" && editableSuggestion && (
             <div className="field ai-review-grid">
               <div>
                 <p className="field-label">Before</p>
@@ -197,9 +241,27 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
               </div>
               <div>
                 <p className="field-label">After</p>
-                <div className="ai-result-box">{resultText}</div>
+                <textarea
+                  ref={suggestionRef}
+                  className="ai-result-box ai-result-editor"
+                  value={editableSuggestion}
+                  onChange={(event) => setEditableSuggestion(event.target.value)}
+                  onSelect={() => {
+                    const element = suggestionRef.current;
+                    if (!element) {
+                      return;
+                    }
+
+                    setSuggestionSelection({
+                      start: element.selectionStart,
+                      end: element.selectionEnd,
+                    });
+                  }}
+                />
               </div>
-              <p className="field-hint">Review the suggestion before applying. This replaces only the selected text.</p>
+              <p className="field-hint">
+                Review or edit the suggestion before applying. "Apply selection" uses only the highlighted portion of the AI output.
+              </p>
             </div>
           )}
 
@@ -215,14 +277,18 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
         <div className="side-panel-footer">
           {phase === "result" ? (
             <>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleApply}>
-                Apply suggestion
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => void handleApply("full")}>
+                Apply all
               </button>
               <button
                 className="btn btn-secondary"
-                onClick={() => { setPhase("idle"); setResult(null); }}
+                onClick={() => void handleApply("partial")}
+                disabled={!hasPartialSelection}
               >
-                Discard
+                Apply selection
+              </button>
+              <button className="btn btn-secondary" onClick={() => void handleReject()}>
+                Reject
               </button>
             </>
           ) : (

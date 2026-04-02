@@ -12,8 +12,8 @@ const { encodeAwarenessFrame, encodeSyncStep1, sendBinary, sendJson } = require(
 
 function createRealtimeServer({
   port = Number(process.env.REALTIME_PORT || 3001),
-  databasePath = process.env.DATABASE_PATH || path.join(__dirname, "../../backend/data/app.sqlite"),
-  realtimeSharedSecret = process.env.REALTIME_SHARED_SECRET || "dev_realtime_secret",
+  databasePath = process.env.DATABASE_PATH || path.join(__dirname, "../../backend/data/collaborative-editor-ai.sqlite"),
+  realtimeSharedSecret = process.env.REALTIME_SHARED_SECRET || "collaborative-editor-ai-dev-secret",
   pollIntervalMs = Number(process.env.EVENT_POLL_INTERVAL_MS || 1200),
 } = {}) {
   const db = new Database(databasePath);

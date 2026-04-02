@@ -126,7 +126,7 @@ export function useRealtimeDocument({
       realtimeService.disconnect();
       setRemotePeers([]);
     };
-  }, [apiClient, document?.documentId, document?.revisionId, userId]);
+  }, [apiClient, document?.documentId, userId]);
 
   return {
     role,

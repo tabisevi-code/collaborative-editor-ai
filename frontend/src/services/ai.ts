@@ -1,4 +1,6 @@
 import type {
+  AiJobFeedbackDisposition,
+  AiJobFeedbackResponse,
   AiJobResponse,
   TextSelection,
 } from "../types/api";
@@ -24,6 +26,11 @@ export interface AiService {
     targetLanguage: string
   ): Promise<AiJobResponse>;
   pollJobUntilDone(jobId: string, options?: PollJobOptions): Promise<AiJobResponse>;
+  recordFeedback(
+    jobId: string,
+    disposition: AiJobFeedbackDisposition,
+    feedback?: { appliedText?: string; appliedRange?: TextSelection }
+  ): Promise<AiJobFeedbackResponse>;
 }
 
 export interface AiSelectionSnapshot {
@@ -93,5 +100,15 @@ export function createAiService(apiClient: ApiClient, userId?: string): AiServic
         userId
       ),
     pollJobUntilDone,
+    recordFeedback: (jobId, disposition, feedback) =>
+      apiClient.recordAiJobFeedback(
+        jobId,
+        {
+          disposition,
+          appliedText: feedback?.appliedText,
+          appliedRange: feedback?.appliedRange,
+        },
+        userId
+      ),
   };
 }

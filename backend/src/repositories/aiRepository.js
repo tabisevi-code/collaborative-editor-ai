@@ -185,6 +185,28 @@ function createAiRepository({ db }) {
     };
   }
 
+  function recordAiJobFeedback({ actorUserId, documentId, jobId, disposition, appliedText = null, appliedRange = null }) {
+    const recordedAt = nowIso();
+
+    appendAuditLog(db, {
+      actorUserId,
+      documentId,
+      actionType: "ai_job_feedback",
+      metadata: {
+        jobId,
+        disposition,
+        appliedText,
+        appliedRange,
+      },
+    });
+
+    return {
+      jobId,
+      disposition,
+      recordedAt,
+    };
+  }
+
   return {
     getAiPolicy,
     updateAiPolicy,
@@ -192,6 +214,7 @@ function createAiRepository({ db }) {
     createAiJob,
     updateAiJob,
     getAiJob,
+    recordAiJobFeedback,
   };
 }
 

@@ -21,6 +21,7 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     requestSummarizeJob: vi.fn(),
     requestTranslateJob: vi.fn(),
     getAiJobStatus: vi.fn(),
+    recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
     getExportJobStatus: vi.fn(),
     downloadExport: vi.fn(),

@@ -3,6 +3,8 @@ const awarenessProtocol = require("y-protocols/awareness");
 
 const { encodeAwarenessFrame, encodeSyncStep2, sendBinary } = require("./transport");
 
+const ROOM_IDLE_TTL_MS = 5000;
+
 function createRoom(documentId, initialContent) {
   const ydoc = new Y.Doc();
   const awareness = new awarenessProtocol.Awareness(ydoc);
@@ -16,6 +18,7 @@ function createRoom(documentId, initialContent) {
     ydoc,
     awareness,
     clients: new Set(),
+    cleanupTimer: null,
   };
 }
 
@@ -31,6 +34,10 @@ function createRoomRegistry({ db }) {
   function getOrCreateRoom(documentId) {
     let room = rooms.get(documentId);
     if (room) {
+      if (room.cleanupTimer) {
+        clearTimeout(room.cleanupTimer);
+        room.cleanupTimer = null;
+      }
       return room;
     }
 
@@ -72,6 +79,10 @@ function createRoomRegistry({ db }) {
   function addClient(client) {
     clients.add(client);
     const room = getOrCreateRoom(client.documentId);
+    if (room.cleanupTimer) {
+      clearTimeout(room.cleanupTimer);
+      room.cleanupTimer = null;
+    }
     room.clients.add(client);
     return room;
   }
@@ -90,7 +101,18 @@ function createRoomRegistry({ db }) {
     }
 
     if (room.clients.size === 0) {
-      rooms.delete(client.documentId);
+      room.cleanupTimer = setTimeout(() => {
+        const currentRoom = rooms.get(client.documentId);
+        if (!currentRoom || currentRoom.clients.size > 0) {
+          return;
+        }
+
+        rooms.delete(client.documentId);
+      }, ROOM_IDLE_TTL_MS);
+
+      if (typeof room.cleanupTimer.unref === "function") {
+        room.cleanupTimer.unref();
+      }
     }
   }
 

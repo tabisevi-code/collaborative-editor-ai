@@ -1,5 +1,7 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
+const swaggerUi = require("swagger-ui-express");
 
 const { createDatabase } = require("./db/database");
 const { createAppRepository } = require("./repositories/appRepository");
@@ -64,6 +66,7 @@ function createApp(config, dependencies = {}) {
 
   const app = express();
   app.disable("x-powered-by");
+  const openApiSpecPath = path.join(__dirname, "..", "docs", "openapi.yaml");
   app.locals.context = {
     db,
     repository,
@@ -78,6 +81,21 @@ function createApp(config, dependencies = {}) {
   app.use(requestIdMiddleware());
   app.use(requestLoggerMiddleware());
   app.use(express.json({ limit: config.jsonBodyLimit }));
+
+  app.get("/docs/openapi.yaml", (_req, res) => {
+    res.type("application/yaml");
+    return res.sendFile(openApiSpecPath);
+  });
+  app.use(
+    "/docs",
+    swaggerUi.serve,
+    swaggerUi.setup(undefined, {
+      explorer: true,
+      swaggerOptions: {
+        url: "/docs/openapi.yaml",
+      },
+    })
+  );
 
   app.use(healthRoutes());
   app.use(authRoutes({ authService }));

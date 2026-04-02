@@ -25,6 +25,7 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     requestSummarizeJob: vi.fn(),
     requestTranslateJob: vi.fn(),
     getAiJobStatus: vi.fn(),
+    recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
     getExportJobStatus: vi.fn(),
     downloadExport: vi.fn(),
@@ -188,6 +189,36 @@ describe("realtime service", () => {
     expect(onPeersChange).toHaveBeenCalled();
   });
 
+  it("ignores anonymous awareness states instead of rendering peer_<clientId> ghost users", async () => {
+    const apiClient = createApiClientMock({
+      createSession: vi.fn(async () => ({
+        sessionId: "sess_123",
+        wsUrl: "ws://localhost:3001/ws?token=abc",
+        role: "editor",
+      })),
+    });
+
+    const onPeersChange = vi.fn();
+    const realtime = createRealtimeService(apiClient);
+    await realtime.connect("doc_123", {
+      userId: "user_1",
+      role: "editor",
+      initialContent: "",
+      onPeersChange,
+    });
+
+    const socket = MockWebSocket.instances[0];
+    socket.onopen?.();
+    socket.onmessage?.({
+      data: createAwarenessFrame(77, {
+        color: "#1a73e8",
+        cursor: 4,
+      }).buffer,
+    });
+
+    expect(onPeersChange).toHaveBeenCalledWith([]);
+  });
+
   it("sends local text updates and blocks viewer edits", async () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
@@ -220,5 +251,31 @@ describe("realtime service", () => {
 
     expect(realtime.applyLocalChange("blocked")).toBe(false);
     expect(onError).toHaveBeenCalledWith("Viewers can follow live updates but cannot edit the document.");
+  });
+
+  it("does not rebroadcast local reset operations back to the socket", async () => {
+    const apiClient = createApiClientMock({
+      createSession: vi.fn(async () => ({
+        sessionId: "sess_123",
+        wsUrl: "ws://localhost:3001/ws?token=abc",
+        role: "editor",
+      })),
+    });
+
+    const realtime = createRealtimeService(apiClient);
+    await realtime.connect("doc_123", {
+      userId: "user_1",
+      role: "editor",
+      initialContent: "",
+    });
+
+    const socket = MockWebSocket.instances[0];
+    socket.onopen?.();
+    socket.sent = [];
+
+    realtime.applyRemoteReset("Fresh body");
+
+    expect(socket.sent).toEqual([]);
+    expect(realtime.getText()).toBe("Fresh body");
   });
 });

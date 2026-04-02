@@ -1,10 +1,14 @@
 import process from "node:process";
+import path from "node:path";
 
-import { printSection, SERVICE_DEFINITIONS, spawnNpmCommand } from "./utils.mjs";
+import { printSection, ROOT_DIR, SERVICE_DEFINITIONS, spawnNpmCommand } from "./utils.mjs";
 
 const DEV_SERVICES = SERVICE_DEFINITIONS.filter((service) =>
   ["backend", "frontend", "realtime"].includes(service.name)
 );
+const SHARED_DATABASE_PATH = path.join(ROOT_DIR, "backend", "data", "collaborative-editor-ai.sqlite");
+const SHARED_REALTIME_SECRET = process.env.REALTIME_SHARED_SECRET || "collaborative-editor-ai-dev-secret";
+const SHARED_REALTIME_WS_BASE_URL = process.env.REALTIME_WS_BASE_URL || "ws://localhost:3001/ws";
 
 const children = [];
 let shuttingDown = false;
@@ -47,11 +51,30 @@ function main() {
   printSection("Starting backend, realtime, and frontend dev servers");
 
   for (const service of DEV_SERVICES) {
+    const serviceEnv = {
+      ...process.env,
+    };
+
+    if (service.name === "backend") {
+      serviceEnv.DATABASE_PATH = serviceEnv.DATABASE_PATH || SHARED_DATABASE_PATH;
+      serviceEnv.REALTIME_SHARED_SECRET = SHARED_REALTIME_SECRET;
+      serviceEnv.REALTIME_WS_BASE_URL = SHARED_REALTIME_WS_BASE_URL;
+    }
+
+    if (service.name === "realtime") {
+      serviceEnv.DATABASE_PATH = serviceEnv.DATABASE_PATH || SHARED_DATABASE_PATH;
+      serviceEnv.REALTIME_SHARED_SECRET = SHARED_REALTIME_SECRET;
+    }
+
+    if (service.name === "frontend") {
+      serviceEnv.VITE_API_BASE_URL = serviceEnv.VITE_API_BASE_URL || "http://localhost:3000";
+    }
+
     const child = spawnNpmCommand({
       cwd: service.cwd,
       label: service.name,
       args: ["run", "dev"],
-      env: process.env,
+      env: serviceEnv,
     });
 
     child.on("error", (error) => {

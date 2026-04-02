@@ -40,6 +40,12 @@ const TranslateSchema = z.object({
   requestId: z.string().trim().min(1).max(128),
 });
 
+const FeedbackSchema = z.object({
+  disposition: z.enum(["applied_full", "applied_partial", "rejected"]),
+  appliedText: z.string().optional(),
+  appliedRange: SelectionSchema.optional(),
+});
+
 function aiRoutes({ aiService }) {
   const router = express.Router();
 
@@ -73,6 +79,15 @@ function aiRoutes({ aiService }) {
   router.get("/ai/jobs/:jobId", (req, res, next) => {
     try {
       const response = aiService.getJob(req.auth, req.params.jobId);
+      return res.status(200).json(response);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post("/ai/jobs/:jobId/feedback", validateBody(FeedbackSchema), (req, res, next) => {
+    try {
+      const response = aiService.recordJobFeedback(req.auth, req.params.jobId, req.validatedBody);
       return res.status(200).json(response);
     } catch (error) {
       return next(error);

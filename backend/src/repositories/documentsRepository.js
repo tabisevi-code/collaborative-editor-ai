@@ -292,7 +292,16 @@ function createDocumentsRepository({ db }) {
     };
   }
 
-  function updateDocumentContent({ documentId, actorUserId, requestId, content, baseRevisionId }) {
+  function updateDocumentContent({
+    documentId,
+    actorUserId,
+    requestId,
+    content,
+    baseRevisionId,
+    preUpdateVersionReason = null,
+    updateReason = "content_update",
+    aiJobId = null,
+  }) {
     const execute = db.transaction(() => {
       const existingIdempotency = getIdempotencyRecord(`document_update:${documentId}`, requestId);
       if (existingIdempotency) {
@@ -300,10 +309,29 @@ function createDocumentsRepository({ db }) {
       }
 
       const document = statements.getDocumentById.get(documentId);
-      const nextVersionNumber = statements.getMaxVersionNumber.get(documentId).maxVersionNumber + 1;
+      const currentMaxVersionNumber = statements.getMaxVersionNumber.get(documentId).maxVersionNumber;
+      let nextVersionNumber = currentMaxVersionNumber;
       const versionId = makeId("ver");
-      const revisionId = `rev_${nextVersionNumber}`;
       const updatedAt = nowIso();
+      let preApplyVersionId = null;
+
+      if (preUpdateVersionReason) {
+        nextVersionNumber += 1;
+        preApplyVersionId = makeId("ver");
+        statements.insertVersion.run({
+          versionId: preApplyVersionId,
+          documentId,
+          versionNumber: nextVersionNumber,
+          createdAt: updatedAt,
+          createdByUserId: actorUserId,
+          reason: preUpdateVersionReason,
+          snapshotContent: document.content,
+          baseRevisionId: document.revision_id,
+        });
+      }
+
+      nextVersionNumber += 1;
+      const revisionId = `rev_${nextVersionNumber}`;
 
       statements.insertVersion.run({
         versionId,
@@ -311,7 +339,7 @@ function createDocumentsRepository({ db }) {
         versionNumber: nextVersionNumber,
         createdAt: updatedAt,
         createdByUserId: actorUserId,
-        reason: "content_update",
+        reason: updateReason,
         snapshotContent: content,
         baseRevisionId,
       });
@@ -327,8 +355,16 @@ function createDocumentsRepository({ db }) {
       appendAuditLog(db, {
         actorUserId,
         documentId,
-        actionType: "document_updated",
-        metadata: { requestId, baseRevisionId, newRevisionId: revisionId },
+        actionType: updateReason.startsWith("ai_") ? "ai_applied" : "document_updated",
+        metadata: {
+          requestId,
+          baseRevisionId,
+          newRevisionId: revisionId,
+          updateReason,
+          preUpdateVersionReason,
+          preApplyVersionId,
+          aiJobId,
+        },
       });
 
       const responseBody = {

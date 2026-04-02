@@ -211,6 +211,23 @@ function createAiService({ repository, provider }) {
       return toAiJobResponse(job);
     },
 
+    recordJobFeedback(user, jobId, payload) {
+      const job = repository.getAiJob(jobId);
+      if (!job) {
+        throw createHttpError(404, "NOT_FOUND", "AI job not found");
+      }
+
+      ensureDocumentAccess(repository, user, job.documentId, "viewer");
+      return repository.recordAiJobFeedback({
+        actorUserId: user.userId,
+        documentId: job.documentId,
+        jobId,
+        disposition: payload.disposition,
+        appliedText: payload.appliedText,
+        appliedRange: payload.appliedRange,
+      });
+    },
+
     async runJobForTests(jobId) {
       const job = await runJob(jobId);
       return toAiJobResponse(job);
