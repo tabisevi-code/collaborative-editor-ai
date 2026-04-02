@@ -9,6 +9,7 @@ const TEST_TARGETS = [
 
 async function main() {
   printSection("Running monorepo test suite");
+  const completedTargets = [];
 
   for (const target of TEST_TARGETS) {
     await runNpmCommand({
@@ -16,6 +17,12 @@ async function main() {
       label: target.name,
       args: target.args,
     });
+    completedTargets.push(target.name);
+  }
+
+  printSection("Suite Summary");
+  for (const target of completedTargets) {
+    process.stdout.write(`- ${target}: PASS\n`);
   }
 
   printSection("test:all completed");

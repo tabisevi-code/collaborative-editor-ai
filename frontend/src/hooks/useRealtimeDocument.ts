@@ -31,6 +31,7 @@ export function useRealtimeDocument({
   const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const [collaborationReady, setCollaborationReady] = useState(false);
   const [accessRevoked, setAccessRevoked] = useState(false);
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
 
   const realtimeServiceRef = useRef<RealtimeService | null>(null);
   const onDocumentRevertedRef = useRef(onDocumentReverted);
@@ -55,7 +56,7 @@ export function useRealtimeDocument({
     return () => {
       realtimeServiceRef.current?.disconnect();
     };
-  }, [apiClient, document?.documentId]);
+  }, [apiClient, document?.documentId, connectionEpoch]);
 
   useEffect(() => {
     if (!document) {
@@ -110,6 +111,7 @@ export function useRealtimeDocument({
         setRole(nextRole);
       },
       onDocumentReverted: () => {
+        setConnectionEpoch((current) => current + 1);
         onDocumentRevertedRef.current?.();
       },
       onAccessRevoked: () => {
@@ -126,7 +128,7 @@ export function useRealtimeDocument({
       realtimeService.disconnect();
       setRemotePeers([]);
     };
-  }, [apiClient, document?.documentId, userId]);
+  }, [apiClient, document?.documentId, userId, connectionEpoch]);
 
   return {
     role,

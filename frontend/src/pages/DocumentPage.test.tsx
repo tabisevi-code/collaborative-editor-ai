@@ -21,6 +21,7 @@ vi.mock("../services/realtime", () => ({
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    login: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -54,7 +55,7 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
         <Route path="/" element={<div>Home Route</div>} />
         <Route
           path="/documents/:documentId"
-          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={vi.fn()} />}
+          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={vi.fn()} onSignOut={vi.fn()} />}
         />
       </Routes>
     </MemoryRouter>
@@ -220,6 +221,15 @@ describe("DocumentPage", () => {
           currentVersionId: "ver_2",
           role: "editor",
           revisionId: "rev_2",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValue({
+          documentId: "doc_123",
+          title: "Conflict Doc",
+          content: "Fresh body",
+          updatedAt: "2026-04-02T00:05:00.000Z",
+          currentVersionId: "ver_2",
+          role: "editor",
+          revisionId: "rev_2",
         } satisfies GetDocumentResponse),
       updateDocument: vi.fn(async () => {
         throw new ApiError(409, "CONFLICT", "base revision is stale", {
@@ -253,6 +263,117 @@ describe("DocumentPage", () => {
     await waitFor(() => {
       expect(mockRealtimeService.applyRemoteReset).toHaveBeenCalledWith("Fresh body");
     });
+  });
+
+  it("retries once with the latest revision during live collaboration before surfacing a stale conflict", async () => {
+    const conflictError = new ApiError(409, "CONFLICT", "base revision is stale", {
+      expectedRevisionId: "rev_2",
+      actualRevisionId: "rev_1",
+    });
+
+    const apiClient = createApiClientMock({
+      getDocument: vi
+        .fn()
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Retry Doc",
+          content: "Original body",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          currentVersionId: "ver_1",
+          role: "editor",
+          revisionId: "rev_1",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Retry Doc",
+          content: "Remote body",
+          updatedAt: "2026-04-02T00:02:00.000Z",
+          currentVersionId: "ver_2",
+          role: "editor",
+          revisionId: "rev_2",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValue({
+          documentId: "doc_123",
+          title: "Retry Doc",
+          content: "Merged body",
+          updatedAt: "2026-04-02T00:03:00.000Z",
+          currentVersionId: "ver_3",
+          role: "editor",
+          revisionId: "rev_3",
+        } satisfies GetDocumentResponse),
+      updateDocument: vi
+        .fn()
+        .mockRejectedValueOnce(conflictError)
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          updatedAt: "2026-04-02T00:03:00.000Z",
+          revisionId: "rev_3",
+        }),
+    });
+
+    renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
+
+    await screen.findByDisplayValue("Original body");
+
+    await act(async () => {
+      options?.onTextChange?.("Merged body");
+    });
+    mockRealtimeService.getText.mockReturnValue("Merged body");
+
+    await waitFor(
+      () => {
+        expect(apiClient.updateDocument).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 2500 }
+    );
+
+    expect(screen.queryByText(/reload latest saved version/i)).not.toBeInTheDocument();
+  });
+
+  it("refreshes metadata after a realtime revert without applying a second local CRDT reset", async () => {
+    const apiClient = createApiClientMock({
+      getDocument: vi
+        .fn()
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Revert Doc",
+          content: "Original body",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          currentVersionId: "ver_1",
+          role: "owner",
+          revisionId: "rev_1",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Revert Doc",
+          content: "Reverted body",
+          updatedAt: "2026-04-02T00:04:00.000Z",
+          currentVersionId: "ver_3",
+          role: "owner",
+          revisionId: "rev_3",
+        } satisfies GetDocumentResponse),
+    });
+
+    renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
+
+    await screen.findByDisplayValue("Original body");
+
+    await act(async () => {
+      options?.onDocumentReverted?.({
+        documentId: "doc_123",
+        currentVersionId: "ver_3",
+        revisionId: "rev_3",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/remote revert was applied/i)).toBeInTheDocument();
+    });
+
+    expect(mockRealtimeService.applyRemoteReset).not.toHaveBeenCalled();
+    expect(mockRealtimeService.connect).toHaveBeenCalledTimes(2);
   });
 
   it("autosaves collaborative changes after a short debounce", async () => {

@@ -1,3 +1,11 @@
+export interface LoginResponse {
+  userId: string;
+  displayName: string;
+  globalRole: "user" | "admin";
+  accessToken: string;
+  expiresIn: number;
+}
+
 export interface CreateDocumentRequest {
   title: string;
   content?: string;
