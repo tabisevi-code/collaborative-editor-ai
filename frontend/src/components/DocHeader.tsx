@@ -5,6 +5,7 @@ import {
   FileMenu, EditMenu, ViewMenu, InsertMenu,
   FormatMenu, ToolsMenu, ExtensionsMenu, HelpMenu,
 } from "./DocMenus";
+import { UserMenu } from "./UserMenu";
 
 type SaveState = "saved" | "unsaved" | "saving" | "error";
 
@@ -111,31 +112,6 @@ export function DocHeader({
         </div>
 
         <div className="gdoc-topbar-right">
-          {onPermissionsOpen && role === "owner" && (
-            <button className="btn btn-sm btn-secondary" onClick={onPermissionsOpen} title="Manage sharing">
-              Share
-            </button>
-          )}
-          {onAiPolicyOpen && role === "owner" && (
-            <button className="btn btn-sm btn-secondary" onClick={onAiPolicyOpen} title="Manage AI policy">
-              AI Policy
-            </button>
-          )}
-          {onExportOpen && (
-            <button className="btn btn-sm btn-secondary" onClick={onExportOpen} title="Export document">
-              Export
-            </button>
-          )}
-          {!isReadOnly && (
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={onSave}
-              disabled={!canSave}
-              title="Save"
-            >
-              Save
-            </button>
-          )}
           <button
             className="btn btn-sm btn-ai"
             onClick={onAiOpen}
@@ -144,39 +120,28 @@ export function DocHeader({
           >
             ✨ AI
           </button>
-          <button className="gd-icon-btn" onClick={onHistoryOpen} title="Version history">
+          <button className="gd-icon-btn" onClick={onHistoryOpen} title="Version history" aria-label="Version history">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
           </button>
-          <label className="user-switch-chip gdoc-user-switch" title="Active user ID for this tab">
-            <div className="gdoc-user-avatar">{initial}</div>
-            <input
-              value={userId}
-              onChange={(event) => onUserIdChange(event.target.value)}
-              placeholder="user_1"
-              aria-label="Active user ID"
-              spellCheck={false}
-            />
-          </label>
-          <button className="btn btn-sm btn-secondary" onClick={onSignOut}>
-            Sign out
-          </button>
+          <UserMenu initial={initial} userId={userId} onUserIdChange={onUserIdChange} onSignOut={onSignOut} />
         </div>
       </header>
 
       {/* ── Menu bar ────────────────────────────────────────────────── */}
       <nav className="gdoc-menubar" aria-label="Document menu">
         <FileMenu
+          onSave={onSave}
+          canSave={canSave}
           onShare={onPermissionsOpen && role === "owner" ? onPermissionsOpen : undefined}
           onExport={onExportOpen}
-          onHistory={onHistoryOpen}
         />
         <EditMenu onToolbarAction={onToolbarAction} readOnly={isReadOnly} />
         <ViewMenu />
         <InsertMenu />
         <FormatMenu onToolbarAction={onToolbarAction} readOnly={isReadOnly} />
-        <ToolsMenu />
+        <ToolsMenu onAiPolicyOpen={onAiPolicyOpen && role === "owner" ? onAiPolicyOpen : undefined} />
         <ExtensionsMenu />
         <HelpMenu />
       </nav>

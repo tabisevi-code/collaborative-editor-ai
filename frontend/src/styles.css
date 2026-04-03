@@ -264,9 +264,9 @@ a { color: inherit; text-decoration: none; }
   margin-left: auto; flex-shrink: 0;
   padding-left: 0.75rem;
 }
-/* subtle vertical divider before the user/sign-out section */
-.gdoc-topbar-right .gd-icon-btn + .gdoc-user-switch,
-.gdoc-topbar-right .gdoc-user-switch {
+/* subtle vertical divider before the user section */
+.gdoc-topbar-right .gd-icon-btn + .gdoc-user-menu,
+.gdoc-topbar-right .gdoc-user-menu {
   margin-left: 0.25rem;
 }
 
@@ -293,6 +293,66 @@ a { color: inherit; text-decoration: none; }
 
 .gdoc-user-switch input {
   width: 72px;
+}
+
+.gdoc-user-menu {
+  position: relative;
+}
+
+.gdoc-user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  height: 40px;
+  padding: 0 0.8rem 0 0.35rem;
+  border: 1px solid var(--gd-border);
+  border-radius: var(--gd-radius-full);
+  background: var(--gd-surface);
+  color: var(--gd-text);
+  cursor: pointer;
+  transition: background var(--gd-t), border-color var(--gd-t);
+}
+
+.gdoc-user-menu-trigger:hover,
+.gdoc-user-menu-trigger--open {
+  background: var(--gd-hover);
+  border-color: var(--gd-border-md);
+}
+
+.gdoc-user-menu-label {
+  font-size: 13px;
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gdoc-user-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  padding: 0.9rem;
+  border: 1px solid var(--gd-border);
+  border-radius: var(--gd-radius-md);
+  background: var(--gd-surface);
+  box-shadow: var(--gd-shadow-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  z-index: 220;
+}
+
+.gdoc-user-menu-field {
+  gap: 0.5rem;
+}
+
+.gdoc-user-menu-input {
+  width: 100%;
+}
+
+.gdoc-user-menu-signout {
+  width: 100%;
 }
 
 .role-pill {

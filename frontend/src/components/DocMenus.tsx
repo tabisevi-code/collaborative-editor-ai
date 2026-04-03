@@ -6,7 +6,7 @@
  * through callback props so the menus and toolbar stay in sync.
  */
 
-import { DropdownMenu } from "./ui/DropdownMenu";
+import { DropdownMenu, type MenuEntry } from "./ui/DropdownMenu";
 import type { ToolbarAction } from "../lib/richTextToolbar";
 
 /* ── shared helpers ─────────────────────────────────────────────────── */
@@ -18,26 +18,28 @@ const SEP = { type: "separator" as const };
    ═══════════════════════════════════════════════════════════════════════ */
 
 interface FileMenuProps {
+  onSave?(): void;
+  canSave?: boolean;
   onShare?(): void;
   onExport?(): void;
-  onHistory?(): void;
   onPrint?(): void;
 }
 
-export function FileMenu({ onShare, onExport, onHistory, onPrint }: FileMenuProps) {
+export function FileMenu({ onSave, canSave = false, onShare, onExport, onPrint }: FileMenuProps) {
+  const items: MenuEntry[] = [
+    { label: "New", shortcut: "Ctrl+N", disabled: true },
+    SEP,
+    { label: "Save", shortcut: "Ctrl+S", onClick: onSave, disabled: !onSave || !canSave },
+    ...(onShare ? [{ label: "Share", onClick: onShare }] : []),
+    ...(onExport ? [{ label: "Export", onClick: onExport }] : []),
+    SEP,
+    { label: "Print", shortcut: "Ctrl+P", onClick: onPrint ?? (() => window.print()) },
+  ];
+
   return (
     <DropdownMenu
-      label="文件"
-      items={[
-        { label: "新建", shortcut: "Ctrl+N", disabled: true },
-        SEP,
-        { label: "分享", onClick: onShare, disabled: !onShare },
-        { label: "導出", onClick: onExport, disabled: !onExport },
-        SEP,
-        { label: "版本歷史", onClick: onHistory, disabled: !onHistory },
-        SEP,
-        { label: "打印", shortcut: "Ctrl+P", onClick: onPrint ?? (() => window.print()) },
-      ]}
+      label="File"
+      items={items}
     />
   );
 }
@@ -55,17 +57,17 @@ export function EditMenu({ onToolbarAction, readOnly }: EditMenuProps) {
   const act = (a: ToolbarAction) => () => onToolbarAction?.(a);
   return (
     <DropdownMenu
-      label="編輯"
+      label="Edit"
       items={[
-        { label: "撤銷",   shortcut: "Ctrl+Z", onClick: act("undo"),   disabled: readOnly || !onToolbarAction },
-        { label: "重做",   shortcut: "Ctrl+Y", onClick: act("redo"),   disabled: readOnly || !onToolbarAction },
+        { label: "Undo", shortcut: "Ctrl+Z", onClick: act("undo"), disabled: readOnly || !onToolbarAction },
+        { label: "Redo", shortcut: "Ctrl+Y", onClick: act("redo"), disabled: readOnly || !onToolbarAction },
         SEP,
-        { label: "剪切",   shortcut: "Ctrl+X", disabled: true },
-        { label: "複製",   shortcut: "Ctrl+C", disabled: true },
-        { label: "粘貼",   shortcut: "Ctrl+V", disabled: true },
+        { label: "Cut", shortcut: "Ctrl+X", disabled: true },
+        { label: "Copy", shortcut: "Ctrl+C", disabled: true },
+        { label: "Paste", shortcut: "Ctrl+V", disabled: true },
         SEP,
-        { label: "全選",   shortcut: "Ctrl+A", onClick: () => document.execCommand("selectAll") },
-        { label: "查找與替換", shortcut: "Ctrl+H", disabled: true },
+        { label: "Select all", shortcut: "Ctrl+A", onClick: () => document.execCommand("selectAll") },
+        { label: "Find and replace", shortcut: "Ctrl+H", disabled: true },
       ]}
     />
   );
@@ -78,14 +80,14 @@ export function EditMenu({ onToolbarAction, readOnly }: EditMenuProps) {
 export function ViewMenu() {
   return (
     <DropdownMenu
-      label="視圖"
+      label="View"
       items={[
         { label: "100%", disabled: true },
         SEP,
-        { label: "打印佈局",   disabled: true },
-        { label: "無頁面佈局", disabled: true },
+        { label: "Print layout", disabled: true },
+        { label: "Pageless layout", disabled: true },
         SEP,
-        { label: "全屏",      disabled: true },
+        { label: "Full screen", disabled: true },
       ]}
     />
   );
@@ -98,18 +100,18 @@ export function ViewMenu() {
 export function InsertMenu() {
   return (
     <DropdownMenu
-      label="插入"
+      label="Insert"
       items={[
-        { label: "圖像",     disabled: true },
-        { label: "鏈接",     shortcut: "Ctrl+K", disabled: true },
+        { label: "Image", disabled: true },
+        { label: "Link", shortcut: "Ctrl+K", disabled: true },
         SEP,
-        { label: "表格",     disabled: true },
-        { label: "水平線",   disabled: true },
+        { label: "Table", disabled: true },
+        { label: "Horizontal line", disabled: true },
         SEP,
-        { label: "頁眉與頁腳", disabled: true },
-        { label: "腳註",     disabled: true },
+        { label: "Headers and footers", disabled: true },
+        { label: "Footnote", disabled: true },
         SEP,
-        { label: "特殊字符", disabled: true },
+        { label: "Special characters", disabled: true },
       ]}
     />
   );
@@ -128,17 +130,17 @@ export function FormatMenu({ onToolbarAction, readOnly }: FormatMenuProps) {
   const act = (a: ToolbarAction) => () => onToolbarAction?.(a);
   return (
     <DropdownMenu
-      label="格式"
+      label="Format"
       items={[
-        { label: "粗體",       shortcut: "Ctrl+B", onClick: act("bold"),      disabled: readOnly || !onToolbarAction },
-        { label: "斜體",       shortcut: "Ctrl+I", onClick: act("italic"),    disabled: readOnly || !onToolbarAction },
-        { label: "下劃線",     shortcut: "Ctrl+U", onClick: act("underline"), disabled: readOnly || !onToolbarAction },
-        { label: "刪除線",     onClick: act("strike"),    disabled: readOnly || !onToolbarAction },
+        { label: "Bold", shortcut: "Ctrl+B", onClick: act("bold"), disabled: readOnly || !onToolbarAction },
+        { label: "Italic", shortcut: "Ctrl+I", onClick: act("italic"), disabled: readOnly || !onToolbarAction },
+        { label: "Underline", shortcut: "Ctrl+U", onClick: act("underline"), disabled: readOnly || !onToolbarAction },
+        { label: "Strikethrough", onClick: act("strike"), disabled: readOnly || !onToolbarAction },
         SEP,
-        { label: "項目符號列表", onClick: act("bulletList"),  disabled: readOnly || !onToolbarAction },
-        { label: "編號列表",    onClick: act("numberedList"), disabled: readOnly || !onToolbarAction },
+        { label: "Bulleted list", onClick: act("bulletList"), disabled: readOnly || !onToolbarAction },
+        { label: "Numbered list", onClick: act("numberedList"), disabled: readOnly || !onToolbarAction },
         SEP,
-        { label: "清除格式",   shortcut: "Ctrl+\\", disabled: true },
+        { label: "Clear formatting", shortcut: "Ctrl+\\", disabled: true },
       ]}
     />
   );
@@ -148,16 +150,28 @@ export function FormatMenu({ onToolbarAction, readOnly }: FormatMenuProps) {
    TOOLS
    ═══════════════════════════════════════════════════════════════════════ */
 
-export function ToolsMenu() {
+interface ToolsMenuProps {
+  onAiPolicyOpen?(): void;
+}
+
+export function ToolsMenu({ onAiPolicyOpen }: ToolsMenuProps) {
+  const items: MenuEntry[] = [
+    ...(onAiPolicyOpen
+      ? [
+          { label: "AI Policy", onClick: onAiPolicyOpen },
+          SEP,
+        ]
+      : []),
+    { label: "Spelling and grammar", disabled: true },
+    { label: "Word count", disabled: true },
+    SEP,
+    { label: "Accessibility", disabled: true },
+  ];
+
   return (
     <DropdownMenu
-      label="工具"
-      items={[
-        { label: "拼寫檢查",   disabled: true },
-        { label: "字數統計",   disabled: true },
-        SEP,
-        { label: "可訪問性",   disabled: true },
-      ]}
+      label="Tools"
+      items={items}
     />
   );
 }
@@ -169,11 +183,11 @@ export function ToolsMenu() {
 export function ExtensionsMenu() {
   return (
     <DropdownMenu
-      label="擴展"
+      label="Extensions"
       items={[
-        { label: "管理擴展",   disabled: true },
+        { label: "Manage extensions", disabled: true },
         SEP,
-        { label: "獲取擴展程序", disabled: true },
+        { label: "Get add-ons", disabled: true },
       ]}
     />
   );
@@ -186,12 +200,12 @@ export function ExtensionsMenu() {
 export function HelpMenu() {
   return (
     <DropdownMenu
-      label="幫助"
+      label="Help"
       items={[
-        { label: "鍵盤快捷鍵", shortcut: "Ctrl+/", disabled: true },
+        { label: "Keyboard shortcuts", shortcut: "Ctrl+/", disabled: true },
         SEP,
-        { label: "關於此編輯器", disabled: true },
-        { label: "發送反饋",   disabled: true },
+        { label: "About this editor", disabled: true },
+        { label: "Send feedback", disabled: true },
       ]}
     />
   );
