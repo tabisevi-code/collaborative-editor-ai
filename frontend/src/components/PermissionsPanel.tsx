@@ -40,6 +40,7 @@ export function PermissionsPanel({
   const [targetUserId, setTargetUserId] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [savingTargetUserId, setSavingTargetUserId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function loadMembers() {
     setPhase("loading");
@@ -106,6 +107,12 @@ export function PermissionsPanel({
     }
   }
 
+  async function handleCopyLink() {
+    await navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <>
       <div className="side-panel-overlay" onClick={onClose} />
@@ -124,6 +131,14 @@ export function PermissionsPanel({
           <p className="field-hint">
             Owners can grant editor or viewer access. The current owner remains protected.
           </p>
+
+          <div className="field">
+            <p className="field-label">Share link</p>
+            <p className="field-hint">Copy this link and send it to colleagues. They still need access granted below.</p>
+            <button className="btn btn-secondary" onClick={() => void handleCopyLink()}>
+              {copied ? "Copied!" : "Copy document link"}
+            </button>
+          </div>
 
           {errorMessage && (
             <div className="status-banner status-error" role="alert">
