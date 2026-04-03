@@ -62,6 +62,10 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
   );
 }
 
+function getPageEditor(pageNumber = 1) {
+  return screen.getByLabelText(`Document content page ${pageNumber}`);
+}
+
 async function resolveRealtimeConnection(text = "Original body") {
   await waitFor(() => {
     expect(mockRealtimeService.connect).toHaveBeenCalled();
@@ -103,7 +107,7 @@ describe("DocumentPage", () => {
       expect(screen.getByText(/viewer access/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Document content")).toHaveAttribute("readonly");
+    expect(getPageEditor()).toHaveAttribute("contenteditable", "false");
   });
 
   it("renders remote collaborative text updates without refreshing", async () => {
@@ -122,14 +126,16 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
 
     await act(async () => {
       options?.onTextChange?.("Remote collaborator update");
     });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Remote collaborator update")).toBeInTheDocument();
+      expect(getPageEditor()).toHaveTextContent("Remote collaborator update");
     });
   });
 
@@ -156,7 +162,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
     await act(async () => {
       options?.onTextChange?.("Collaborative draft");
     });
@@ -242,7 +250,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
     await act(async () => {
       options?.onTextChange?.("Changed collaboratively");
     });
@@ -314,7 +324,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
 
     await act(async () => {
       options?.onTextChange?.("Merged body");
@@ -358,7 +370,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
 
     await act(async () => {
       options?.onDocumentReverted?.({
@@ -408,7 +422,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
     await act(async () => {
       options?.onTextChange?.("Autosaved draft");
     });
