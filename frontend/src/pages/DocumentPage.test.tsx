@@ -66,6 +66,11 @@ function getPageEditor(pageNumber = 1) {
   return screen.getByLabelText(`Document content page ${pageNumber}`);
 }
 
+function clickFileMenuSave() {
+  fireEvent.click(screen.getByRole("button", { name: "File" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /save/i }));
+}
+
 async function resolveRealtimeConnection(text = "Original body") {
   await waitFor(() => {
     expect(mockRealtimeService.connect).toHaveBeenCalled();
@@ -174,7 +179,7 @@ describe("DocumentPage", () => {
       expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Save"));
+    clickFileMenuSave();
 
     await waitFor(() => {
       expect(apiClient.updateDocument).toHaveBeenCalledWith(
@@ -262,7 +267,7 @@ describe("DocumentPage", () => {
       expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Save"));
+    clickFileMenuSave();
 
     await waitFor(() => {
       expect(screen.getByText(/reload latest saved version/i)).toBeInTheDocument();
