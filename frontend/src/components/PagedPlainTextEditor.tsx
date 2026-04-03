@@ -1,4 +1,5 @@
 import {
+  type CompositionEvent,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -9,6 +10,7 @@ import {
 
 import type { TextSelection } from "../types/api";
 import { paginatePlainText, type PaginationPage } from "../lib/paginatePlainText";
+import { renderRichTextPreview } from "../lib/richTextPreview";
 
 const PAGE_INNER_WIDTH_PX = 624;
 const PAGE_INNER_HEIGHT_PX = 864;
@@ -125,6 +127,7 @@ export const PagedPlainTextEditor = forwardRef<PagedPlainTextEditorHandle, Paged
     const latestSelectionRef = useRef<TextSelection>({ start: 0, end: 0 });
     const shouldRestoreSelectionRef = useRef(autoFocus);
     const lastPageCountRef = useRef(0);
+    const isComposingRef = useRef(false);
 
     if (!measurerRef.current) {
       measurerRef.current = createTextMeasurer();
@@ -207,16 +210,40 @@ export const PagedPlainTextEditor = forwardRef<PagedPlainTextEditorHandle, Paged
     }
 
     function handleSelectionCapture() {
+      if (isComposingRef.current) {
+        return;
+      }
+
       syncSelectionState(readSelectionFromDom());
     }
 
     function handleInput() {
+      if (isComposingRef.current) {
+        return;
+      }
+
       const nextValue = readNextValueFromDom();
       const nextSelection = clampSelection(readSelectionFromDom(), nextValue.length);
       shouldRestoreSelectionRef.current = true;
       latestSelectionRef.current = nextSelection;
       onSelectionChange(nextSelection);
       onChange(nextValue);
+    }
+
+    function handleCompositionStart() {
+      // IME text is still being composed here; re-rendering now will reset the
+      // browser's composition buffer and make Chinese/Japanese/Korean input
+      // feel like it only accepts one character at a time.
+      isComposingRef.current = true;
+      console.debug("[paged-editor] composition_start");
+    }
+
+    function handleCompositionEnd(event: CompositionEvent<HTMLDivElement>) {
+      isComposingRef.current = false;
+      console.debug("[paged-editor] composition_end", {
+        data: event.data ?? "",
+      });
+      handleInput();
     }
 
     function restoreSelection(selection: TextSelection) {
@@ -243,6 +270,10 @@ export const PagedPlainTextEditor = forwardRef<PagedPlainTextEditorHandle, Paged
     }
 
     useLayoutEffect(() => {
+      if (isComposingRef.current) {
+        return;
+      }
+
       if (!shouldRestoreSelectionRef.current && !hasFocusedPage()) {
         return;
       }
@@ -305,11 +336,13 @@ export const PagedPlainTextEditor = forwardRef<PagedPlainTextEditorHandle, Paged
               spellCheck
               data-placeholder={page.index === 0 ? "Start typing…" : ""}
               onInput={handleInput}
+              onCompositionStart={handleCompositionStart}
+              onCompositionEnd={handleCompositionEnd}
               onKeyUp={handleSelectionCapture}
               onMouseUp={handleSelectionCapture}
               onFocus={handleSelectionCapture}
             >
-              {page.text}
+              {renderRichTextPreview(page.text, `page-${page.index}`)}
             </div>
           </article>
         ))}
