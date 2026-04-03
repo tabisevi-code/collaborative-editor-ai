@@ -7,6 +7,7 @@ import { AiPolicyPanel } from "../components/AiPolicyPanel";
 import { DocHeader } from "../components/DocHeader";
 import { ExportPanel } from "../components/ExportPanel";
 import { MetadataCard } from "../components/MetadataCard";
+import { PagedPlainTextEditor, type PagedPlainTextEditorHandle } from "../components/PagedPlainTextEditor";
 import { PermissionsPanel } from "../components/PermissionsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { VersionHistoryPanel } from "../components/VersionHistoryPanel";
@@ -59,7 +60,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<PagedPlainTextEditorHandle>(null);
   const requestIdRef = useRef(0);
   const historyRef = useRef<string[]>([""]);
   const historyIndexRef = useRef(0);
@@ -137,13 +138,13 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
     setSelectedText(nextSelection.start === nextSelection.end ? "" : content.slice(nextSelection.start, nextSelection.end));
 
     window.requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) {
+      const editor = editorRef.current;
+      if (!editor) {
         return;
       }
 
-      textarea.focus();
-      textarea.setSelectionRange(nextSelection.start, nextSelection.end);
+      editor.focus();
+      editor.setSelection(nextSelection);
     });
   }
 
@@ -338,15 +339,12 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
   }
 
   function captureSelection() {
-    const ta = textareaRef.current;
-    if (!ta) {
+    const editor = editorRef.current;
+    if (!editor) {
       return;
     }
 
-    const nextSelection = {
-      start: ta.selectionStart,
-      end: ta.selectionEnd,
-    };
+    const nextSelection = editor.getSelection();
     setSelection(nextSelection);
     realtimeDocument.setCursorSelection(nextSelection.start === nextSelection.end ? null : nextSelection);
   }
@@ -443,10 +441,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
       return;
     }
 
-    const textarea = textareaRef.current;
-    const currentSelection = textarea
-      ? { start: textarea.selectionStart, end: textarea.selectionEnd }
-      : selection;
+    const currentSelection = editorRef.current?.getSelection() ?? selection;
     const result = applyToolbarAction(visibleContent, currentSelection, action);
     applyVisibleContent(result.value, `toolbar:${action}`, { recordHistory: true });
     syncSelection(result.selection, result.value);
@@ -497,7 +492,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
         )}
 
         {document && (
-          <div className="gdoc-page">
+          <div className="gdoc-document-stack">
             {(isReadOnly || !realtimeDocument.collaborationReady) && (
               <div style={{ marginBottom: "1rem" }}>
                 <StatusBanner
@@ -555,22 +550,22 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
               </div>
             )}
 
-            <textarea
-              ref={textareaRef}
-              className="gdoc-editor"
+            <PagedPlainTextEditor
+              ref={editorRef}
               value={visibleContent}
-              onChange={(event) => handleEditorChange(event.target.value)}
-              onSelect={captureSelection}
-              onMouseUp={captureSelection}
-              onKeyUp={captureSelection}
+              onChange={handleEditorChange}
+              onSelectionChange={(nextSelection) => {
+                setSelection(nextSelection);
+                realtimeDocument.setCursorSelection(
+                  nextSelection.start === nextSelection.end ? null : nextSelection
+                );
+              }}
               readOnly={isReadOnly}
-              aria-label="Document content"
-              spellCheck
               autoFocus={!isReadOnly}
             />
 
             {showMeta && (
-              <div style={{ marginTop: "2rem", borderTop: "1px solid var(--gd-border)", paddingTop: "1.5rem" }}>
+              <div className="gdoc-meta-panel">
                 <MetadataCard document={{ ...document, role: realtimeDocument.role }} />
               </div>
             )}
