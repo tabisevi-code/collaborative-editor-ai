@@ -1,6 +1,10 @@
 import { Link } from "react-router-dom";
 import type { GetDocumentResponse } from "../types/api";
 import type { ToolbarAction } from "../lib/richTextToolbar";
+import {
+  FileMenu, EditMenu, ViewMenu, InsertMenu,
+  FormatMenu, ToolsMenu, ExtensionsMenu, HelpMenu,
+} from "./DocMenus";
 
 type SaveState = "saved" | "unsaved" | "saving" | "error";
 
@@ -163,11 +167,18 @@ export function DocHeader({
 
       {/* ── Menu bar ────────────────────────────────────────────────── */}
       <nav className="gdoc-menubar" aria-label="Document menu">
-        {["File", "Edit", "View", "Insert", "Format", "Tools", "Extensions", "Help"].map((item) => (
-          <button key={item} className="gdoc-menu-item" title={`${item} (not yet implemented)`}>
-            {item}
-          </button>
-        ))}
+        <FileMenu
+          onShare={onPermissionsOpen && role === "owner" ? onPermissionsOpen : undefined}
+          onExport={onExportOpen}
+          onHistory={onHistoryOpen}
+        />
+        <EditMenu onToolbarAction={onToolbarAction} readOnly={isReadOnly} />
+        <ViewMenu />
+        <InsertMenu />
+        <FormatMenu onToolbarAction={onToolbarAction} readOnly={isReadOnly} />
+        <ToolsMenu />
+        <ExtensionsMenu />
+        <HelpMenu />
       </nav>
 
       {/* ── Format toolbar ──────────────────────────────────────────── */}

@@ -259,7 +259,16 @@ a { color: inherit; text-decoration: none; }
 .gdoc-save-chip.saving  { color: var(--gd-blue); }
 .gdoc-save-chip.error   { color: #d93025; }
 
-.gdoc-topbar-right { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; flex-shrink: 0; }
+.gdoc-topbar-right {
+  display: flex; align-items: center; gap: 0.35rem;
+  margin-left: auto; flex-shrink: 0;
+  padding-left: 0.75rem;
+}
+/* subtle vertical divider before the user/sign-out section */
+.gdoc-topbar-right .gd-icon-btn + .gdoc-user-switch,
+.gdoc-topbar-right .gdoc-user-switch {
+  margin-left: 0.25rem;
+}
 
 .gd-share-btn {
   display: flex; align-items: center; gap: 0.4rem;
@@ -306,8 +315,53 @@ a { color: inherit; text-decoration: none; }
   border-radius: var(--gd-radius-sm); cursor: pointer; border: none; background: transparent;
   transition: background var(--gd-t); white-space: nowrap;
 }
-.gdoc-menu-item:hover  { background: var(--gd-hover); }
-.gdoc-menu-item:active { background: var(--gd-active); }
+.gdoc-menu-item:hover:not(:disabled)  { background: var(--gd-hover); }
+.gdoc-menu-item:active:not(:disabled) { background: var(--gd-active); }
+.gdoc-menu-item--open { background: var(--gd-hover); }
+
+/* Dropdown container — anchor for absolute-positioned menu */
+.gdoc-dropdown-container { position: relative; }
+
+/* Dropdown menu panel */
+.gdoc-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  min-width: 220px;
+  background: var(--gd-surface);
+  border: 1px solid var(--gd-border);
+  border-radius: var(--gd-radius-md);
+  box-shadow: var(--gd-shadow-md);
+  padding: 4px 0;
+  z-index: 200;
+  animation: gdoc-dropdown-in 80ms ease;
+}
+
+@keyframes gdoc-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Dropdown items */
+.gdoc-dropdown-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 6px 14px;
+  font-size: 13px; color: var(--gd-text);
+  border: none; background: transparent;
+  cursor: pointer; text-align: left;
+  transition: background var(--gd-t);
+}
+.gdoc-dropdown-item:hover:not(:disabled) { background: var(--gd-hover); }
+.gdoc-dropdown-item:disabled { opacity: 0.45; cursor: default; }
+
+.gdoc-dropdown-item-icon  { width: 16px; flex-shrink: 0; color: var(--gd-text-2); }
+.gdoc-dropdown-item-label { flex: 1; }
+.gdoc-dropdown-item-shortcut {
+  font-size: 12px; color: var(--gd-text-3); margin-left: auto; padding-left: 16px;
+}
+
+/* Dropdown separator */
+.gdoc-dropdown-sep { height: 1px; background: var(--gd-border); margin: 4px 0; }
 
 /* Format toolbar */
 .gdoc-toolbar {
@@ -444,8 +498,8 @@ a { color: inherit; text-decoration: none; }
 .btn-ghost    { background: transparent; color: var(--gd-text-2); }
 .btn-ghost:hover:not(:disabled)     { background: var(--gd-hover); color: var(--gd-text); }
 
-.btn-ai       { background: #f3e8ff; color: #7c3aed; border-color: #ddd6fe; }
-.btn-ai:hover:not(:disabled)        { background: #ede9fe; }
+.btn-ai       { background: #ede9fe; color: #6d28d9; border-color: #c4b5fd; }
+.btn-ai:hover:not(:disabled)        { background: #ddd6fe; }
 
 .btn-danger   { background: #fce8e6; color: #c5221f; border-color: #f5c6c5; }
 .btn-danger:hover:not(:disabled)    { background: #fad2cf; }
