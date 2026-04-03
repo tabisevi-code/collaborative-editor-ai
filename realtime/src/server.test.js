@@ -227,6 +227,30 @@ test("authenticated clients receive seeded document content", async () => {
   }
 });
 
+test("server bootstrap creates the database directory when it is missing", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "collab-rt-missing-dir-"));
+  const nestedDir = path.join(tempDir, "missing", "db");
+  const databasePath = path.join(nestedDir, "app.sqlite");
+
+  let server;
+  try {
+    server = createRealtimeServer({
+      port: 0,
+      databasePath,
+      realtimeSharedSecret: "test_realtime_secret",
+      pollIntervalMs: 50,
+    });
+
+    assert.equal(fs.existsSync(nestedDir), true);
+    assert.equal(fs.existsSync(databasePath), true);
+  } finally {
+    if (server) {
+      await server.close();
+    }
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("editor updates converge across two connected clients", async () => {
   const fixture = createFixture();
 

@@ -1,9 +1,8 @@
 const path = require("path");
 
-const Database = require("better-sqlite3");
 const { WebSocketServer } = require("ws");
 
-const { initializeSchema } = require("../../backend/src/db/schema");
+const { createDatabase } = require("../../backend/src/db/database");
 const { authenticateRealtimeRequest } = require("./ws/auth");
 const { createEventPoller } = require("./ws/eventPoller");
 const { createProtocolHandlers } = require("./ws/protocol");
@@ -16,8 +15,9 @@ function createRealtimeServer({
   realtimeSharedSecret = process.env.REALTIME_SHARED_SECRET || "collaborative-editor-ai-dev-secret",
   pollIntervalMs = Number(process.env.EVENT_POLL_INTERVAL_MS || 1200),
 } = {}) {
-  const db = new Database(databasePath);
-  initializeSchema(db);
+  // Reuse the backend database bootstrap so both services agree on
+  // directory creation, SQLite pragmas, and schema initialization.
+  const db = createDatabase({ databasePath });
 
   const roomRegistry = createRoomRegistry({ db });
   const protocolHandlers = createProtocolHandlers({
