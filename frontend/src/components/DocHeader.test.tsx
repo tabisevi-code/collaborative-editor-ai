@@ -24,7 +24,6 @@ function renderHeader({
   saveState?: "saved" | "unsaved" | "saving" | "error";
 } = {}) {
   const onTitleChange = vi.fn();
-  const onUserIdChange = vi.fn();
   const onSignOut = vi.fn();
   const onSave = vi.fn();
   const onAiOpen = vi.fn();
@@ -42,7 +41,7 @@ function renderHeader({
         onTitleChange={onTitleChange}
         saveState={saveState}
         userId="user_1"
-        onUserIdChange={onUserIdChange}
+        displayName="User One"
         onSignOut={onSignOut}
         realtimeStatus="Live sync connected"
         onSave={onSave}
@@ -58,7 +57,6 @@ function renderHeader({
 
   return {
     onTitleChange,
-    onUserIdChange,
     onSignOut,
     onSave,
     onAiOpen,
@@ -124,15 +122,14 @@ describe("DocHeader", () => {
     expect(screen.queryByRole("menuitem", { name: "AI Policy" })).not.toBeInTheDocument();
   });
 
-  it("lets the user dropdown edit the active user id and trigger sign out", () => {
+  it("shows the signed-in account summary and triggers sign out", () => {
     const handlers = renderHeader({ role: "owner", saveState: "saved" });
 
     fireEvent.click(screen.getByRole("button", { name: "Open user menu" }));
 
     const dialog = screen.getByRole("dialog", { name: "User menu" });
-    const input = within(dialog).getByRole("textbox", { name: "Active user ID" });
-    fireEvent.change(input, { target: { value: "user_7" } });
-    expect(handlers.onUserIdChange).toHaveBeenCalledWith("user_7");
+    expect(within(dialog).getByText("User One")).toBeInTheDocument();
+    expect(within(dialog).getByText("user_1")).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Sign out" }));
     expect(handlers.onSignOut).toHaveBeenCalledTimes(1);

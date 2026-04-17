@@ -1,53 +1,70 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 
-import type { ApiClient } from "../services/api";
+import { AuthProvider } from "../auth/AuthContext";
 import { LoginPage } from "./LoginPage";
 
-function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
+function createAuthAdapterMock() {
   return {
-    login: vi.fn(async (userId: string) => ({
-      userId,
-      displayName: userId,
-      globalRole: "user",
-      accessToken: `token_${userId}`,
-      expiresIn: 86400,
+    login: vi.fn(async ({ identifier }: { identifier: string }) => ({
+      user: {
+        id: identifier,
+        displayName: identifier,
+      },
+      accessToken: `token_${identifier}`,
+      refreshToken: `refresh_${identifier}`,
+      expiresAt: "2026-04-30T00:00:00.000Z",
     })),
-    createDocument: vi.fn(),
-    getDocument: vi.fn(),
-    updateDocument: vi.fn(),
-    listVersions: vi.fn(),
-    listPermissions: vi.fn(),
-    updatePermission: vi.fn(),
-    revokePermission: vi.fn(),
-    getAiPolicy: vi.fn(),
-    updateAiPolicy: vi.fn(),
-    revertToVersion: vi.fn(),
-    requestRewriteJob: vi.fn(),
-    requestSummarizeJob: vi.fn(),
-    requestTranslateJob: vi.fn(),
-    getAiJobStatus: vi.fn(),
-    recordAiJobFeedback: vi.fn(),
-    createExport: vi.fn(),
-    getExportJobStatus: vi.fn(),
-    downloadExport: vi.fn(),
-    createSession: vi.fn(),
-    ...overrides,
+    register: vi.fn(),
+    refresh: vi.fn(async () => {
+      throw new Error("refresh should not be called in this test");
+    }),
   };
 }
 
+function renderLoginPage(adapter = createAuthAdapterMock()) {
+  render(
+    <AuthProvider adapter={adapter}>
+      <MemoryRouter initialEntries={["/login"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<div>Dashboard Route</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
+  );
+
+  return adapter;
+}
+
 describe("LoginPage", () => {
-  it("authenticates the entered user id and calls onAuthenticated", async () => {
-    const apiClient = createApiClientMock();
-    const onAuthenticated = vi.fn();
+  it("submits identifier and password through the auth provider", async () => {
+    const adapter = renderLoginPage();
 
-    render(<LoginPage apiClient={apiClient} onAuthenticated={onAuthenticated} />);
-
-    fireEvent.change(screen.getByLabelText(/user id/i), { target: { value: "user_2" } });
+    fireEvent.change(screen.getByLabelText(/identifier/i), { target: { value: "user_2" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "secret-pass" } });
     fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
 
     await waitFor(() => {
-      expect(apiClient.login).toHaveBeenCalledWith("user_2");
-      expect(onAuthenticated).toHaveBeenCalledWith("user_2");
+      expect(adapter.login).toHaveBeenCalledWith({
+        identifier: "user_2",
+        password: "secret-pass",
+      });
+      expect(screen.getByText("Dashboard Route")).toBeInTheDocument();
+    });
+  });
+
+  it("shows backend-facing errors from the auth adapter", async () => {
+    const adapter = createAuthAdapterMock();
+    adapter.login.mockRejectedValueOnce(new Error("broken"));
+    renderLoginPage(adapter);
+
+    fireEvent.change(screen.getByLabelText(/identifier/i), { target: { value: "user_2" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "secret-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/unexpected authentication error/i)).toBeInTheDocument();
     });
   });
 });

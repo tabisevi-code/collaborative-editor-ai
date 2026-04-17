@@ -1,40 +1,36 @@
+import { Link, useNavigate } from "react-router-dom";
 import { useState, type FormEvent } from "react";
 
+import { toAuthError, useAuth } from "../auth/AuthContext";
 import { StatusBanner } from "../components/StatusBanner";
-import type { ApiClient } from "../services/api";
-import { ApiError } from "../types/api";
 
-interface LoginPageProps {
-  apiClient: ApiClient;
-  onAuthenticated(userId: string): void;
-}
-
-function mapLoginError(error: ApiError): string {
+function mapLoginError(error: ReturnType<typeof toAuthError>): string {
   if (error.code === "NETWORK_ERROR") {
-    return "Backend unavailable. Start the backend service and try again.";
+    return "The backend is unavailable. Start it and try again.";
   }
 
   return error.message || "Sign-in failed. Please try again.";
 }
 
-export function LoginPage({ apiClient, onAuthenticated }: LoginPageProps) {
-  const [userId, setUserId] = useState("user_1");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export function LoginPage() {
+  const navigate = useNavigate();
+  const { login, authStatus } = useAuth();
+  const [identifier, setIdentifier] = useState("user_1");
+  const [password, setPassword] = useState("demo-pass");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
-      const session = await apiClient.login(userId);
-      onAuthenticated(session.userId);
+      await login({
+        identifier,
+        password,
+      });
+      navigate("/", { replace: true });
     } catch (error) {
-      const apiError = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN_ERROR", "unknown error");
-      setErrorMessage(mapLoginError(apiError));
-    } finally {
-      setIsSubmitting(false);
+      setErrorMessage(mapLoginError(toAuthError(error)));
     }
   }
 
@@ -44,20 +40,33 @@ export function LoginPage({ apiClient, onAuthenticated }: LoginPageProps) {
         <div className="login-brand">Collaborative Editor AI</div>
         <h1>Sign in</h1>
         <p>
-          This MVP uses local bearer-token authentication. Sign in as <code>user_1</code>, <code>user_2</code>, or another user ID to open the system.
+          Sign in with a registered account or use one of the current demo identifiers while the
+          FastAPI auth contract is still being finalized.
         </p>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="field">
-            <label className="field-label" htmlFor="login-user-id">User ID</label>
+            <label className="field-label" htmlFor="login-identifier">Identifier</label>
             <input
-              id="login-user-id"
+              id="login-identifier"
               className="text-input"
-              value={userId}
-              onChange={(event) => setUserId(event.target.value)}
+              value={identifier}
+              onChange={(event) => setIdentifier(event.target.value)}
               placeholder="user_1"
               autoFocus
               spellCheck={false}
+            />
+          </div>
+
+          <div className="field">
+            <label className="field-label" htmlFor="login-password">Password</label>
+            <input
+              id="login-password"
+              className="text-input"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter your password"
             />
           </div>
 
@@ -69,17 +78,28 @@ export function LoginPage({ apiClient, onAuthenticated }: LoginPageProps) {
                 key={candidate}
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => setUserId(candidate)}
+                onClick={() => setIdentifier(candidate)}
               >
                 Use {candidate}
               </button>
             ))}
           </div>
 
-          <button type="submit" className="btn btn-primary" disabled={!userId.trim() || isSubmitting}>
-            {isSubmitting ? "Signing in..." : "Sign in"}
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!identifier.trim() || !password.trim() || authStatus === "refreshing"}
+          >
+            {authStatus === "refreshing" ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <p className="auth-footer-copy">
+          Need an account?{" "}
+          <Link to="/register" className="auth-link">
+            Create one
+          </Link>
+        </p>
       </div>
     </div>
   );

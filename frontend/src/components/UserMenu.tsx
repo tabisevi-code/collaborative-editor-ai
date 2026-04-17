@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface UserMenuProps {
   initial: string;
+  displayName: string;
   userId: string;
-  onUserIdChange(nextValue: string): void;
   onSignOut(): void;
 }
 
@@ -12,7 +12,7 @@ interface UserMenuProps {
  * chrome stays light on the right side while session controls remain easy
  * to discover and edit.
  */
-export function UserMenu({ initial, userId, onUserIdChange, onSignOut }: UserMenuProps) {
+export function UserMenu({ initial, displayName, userId, onSignOut }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -69,17 +69,13 @@ export function UserMenu({ initial, userId, onUserIdChange, onSignOut }: UserMen
 
       {open && (
         <div className="gdoc-user-menu-panel" role="dialog" aria-label="User menu">
-          <label className="field gdoc-user-menu-field">
-            <span className="field-label">Active user ID</span>
-            <input
-              className="text-input gdoc-user-menu-input"
-              value={userId}
-              onChange={(event) => onUserIdChange(event.target.value)}
-              placeholder="user_1"
-              aria-label="Active user ID"
-              spellCheck={false}
-            />
-          </label>
+          <div className="field gdoc-user-menu-field">
+            <span className="field-label">Signed in as</span>
+            <div className="gdoc-user-menu-summary">
+              <strong>{displayName || userId}</strong>
+              <span>{userId}</span>
+            </div>
+          </div>
           <button
             className="btn btn-secondary gdoc-user-menu-signout"
             type="button"

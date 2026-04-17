@@ -1,11 +1,11 @@
 /** Google Docs-style home top bar */
 interface AppBarProps {
   userId: string;
-  onUserIdChange(nextValue: string): void;
+  displayName: string;
   onSignOut(): void;
 }
 
-export function AppBar({ userId, onUserIdChange, onSignOut }: AppBarProps) {
+export function AppBar({ userId, displayName, onSignOut }: AppBarProps) {
   const initial = userId.charAt(0).toUpperCase() || "U";
 
   return (
@@ -36,16 +36,13 @@ export function AppBar({ userId, onUserIdChange, onSignOut }: AppBarProps) {
 
       {/* Right: user switcher + avatar */}
       <div className="home-topbar-right">
-        <label className="user-switch-chip" title="Active user ID — change to switch roles">
+        <div className="user-switch-chip" title={`Signed in as ${userId}`}>
           <div className="home-user-avatar" style={{ width: 24, height: 24, fontSize: 11 }}>{initial}</div>
-          <input
-            value={userId}
-            onChange={(e) => onUserIdChange(e.target.value)}
-            placeholder="user_1"
-            aria-label="User ID"
-            spellCheck={false}
-          />
-        </label>
+          <div className="user-switch-summary">
+            <strong>{displayName || userId}</strong>
+            <span>{userId}</span>
+          </div>
+        </div>
         <button className="btn btn-secondary btn-sm" onClick={onSignOut}>
           Sign out
         </button>
