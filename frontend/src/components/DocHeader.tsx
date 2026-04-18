@@ -16,7 +16,7 @@ interface DocHeaderProps {
   onTitleChange(title: string): void;
   saveState: SaveState;
   userId: string;
-  onUserIdChange(nextValue: string): void;
+  displayName: string;
   onSignOut(): void;
   realtimeStatus?: string;
   onSave(): void;
@@ -56,7 +56,7 @@ export function DocHeader({
   onTitleChange,
   saveState,
   userId,
-  onUserIdChange,
+  displayName,
   onSignOut,
   realtimeStatus,
   onSave,
@@ -125,7 +125,7 @@ export function DocHeader({
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
           </button>
-          <UserMenu initial={initial} userId={userId} onUserIdChange={onUserIdChange} onSignOut={onSignOut} />
+          <UserMenu initial={initial} displayName={displayName} userId={userId} onSignOut={onSignOut} />
         </div>
       </header>
 

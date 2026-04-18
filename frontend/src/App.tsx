@@ -1,101 +1,101 @@
-import { useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import type { ReactElement } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AppBar } from "./components/AppBar";
-import { createApiClient } from "./services/api";
 import { DocumentPage } from "./pages/DocumentPage";
 import { HomePage } from "./pages/HomePage";
 import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { createApiClient } from "./services/api";
+import { createMockFirstAuthAdapter } from "./services/authAdapter";
+import { createDashboardService } from "./services/dashboard";
 
-const DEFAULT_USER_ID = "";
-const USER_ID_STORAGE_KEY = "collaborative-editor-ai.user-id";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() || "http://localhost:3000";
 const apiClient = createApiClient(API_BASE_URL);
+const authAdapter = createMockFirstAuthAdapter(apiClient);
+const dashboardService = createDashboardService();
 
-function readSessionUserId(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
+function ProtectedRoute({ children }: { children: ReactElement }) {
+  const { session, authStatus } = useAuth();
 
-  return window.sessionStorage.getItem(USER_ID_STORAGE_KEY)?.trim() || null;
-}
-
-function readStoredUserId(): string {
-  if (typeof window === "undefined") {
-    return DEFAULT_USER_ID;
-  }
-
-  const sessionUserId = readSessionUserId();
-  if (sessionUserId) {
-    return sessionUserId;
-  }
-
-  return window.localStorage.getItem(USER_ID_STORAGE_KEY)?.trim() || DEFAULT_USER_ID;
-}
-
-/**
- * Document pages use their own full-screen layout (Google Docs style).
- * The home shell wraps home routes with the AppBar.
- */
-function AppRoutes({
-  userId,
-  onUserIdChange,
-  onSignOut,
-}: {
-  userId: string;
-  onUserIdChange(v: string): void;
-  onSignOut(): void;
-}) {
-  const location = useLocation();
-  const isDocPage = location.pathname.startsWith("/documents/");
-
-  if (!userId.trim()) {
-    return <LoginPage apiClient={apiClient} onAuthenticated={onUserIdChange} />;
-  }
-
-  if (isDocPage) {
+  if (authStatus === "restoring" || authStatus === "refreshing") {
     return (
-      <Routes>
-        <Route
-          path="/documents/:documentId"
-          element={
-            <DocumentPage
-              apiClient={apiClient}
-              userId={userId}
-              onUserIdChange={onUserIdChange}
-              onSignOut={onSignOut}
-            />
-          }
-        />
-      </Routes>
+      <div className="login-shell">
+        <div className="login-card">
+          <div className="login-brand">Collaborative Editor AI</div>
+          <h1>Restoring session</h1>
+          <p>Checking your saved session before opening the workspace.</p>
+        </div>
+      </div>
     );
   }
 
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+function AppRoutes() {
+  const { session, logout } = useAuth();
+
   return (
-    <div className="home-shell">
-      <AppBar userId={userId} onUserIdChange={onUserIdChange} onSignOut={onSignOut} />
-      <Routes>
-        <Route path="/" element={<HomePage apiClient={apiClient} userId={userId} />} />
-      </Routes>
-    </div>
+    <Routes>
+      <Route
+        path="/login"
+        element={session ? <Navigate to="/" replace /> : <LoginPage />}
+      />
+      <Route
+        path="/register"
+        element={session ? <Navigate to="/" replace /> : <RegisterPage />}
+      />
+      <Route
+        path="/documents/:documentId"
+        element={(
+          <ProtectedRoute>
+            <DocumentPage
+              apiClient={apiClient}
+              dashboardService={dashboardService}
+              userId={session?.user.id || ""}
+              displayName={session?.user.displayName || ""}
+              onSignOut={logout}
+            />
+          </ProtectedRoute>
+        )}
+      />
+      <Route
+        path="/"
+        element={(
+          <ProtectedRoute>
+            <div className="home-shell">
+              <AppBar
+                userId={session?.user.id || ""}
+                displayName={session?.user.displayName || ""}
+                onSignOut={logout}
+              />
+              <HomePage
+                apiClient={apiClient}
+                dashboardService={dashboardService}
+                userId={session?.user.id || ""}
+                displayName={session?.user.displayName || ""}
+              />
+            </div>
+          </ProtectedRoute>
+        )}
+      />
+      <Route path="*" element={<Navigate to={session ? "/" : "/login"} replace />} />
+    </Routes>
   );
 }
 
 export function App() {
-  const [userId, setUserId] = useState(readStoredUserId);
-
-  useEffect(() => {
-    if (userId.trim()) {
-      window.sessionStorage.setItem(USER_ID_STORAGE_KEY, userId);
-    } else {
-      window.sessionStorage.removeItem(USER_ID_STORAGE_KEY);
-    }
-    window.localStorage.removeItem(USER_ID_STORAGE_KEY);
-  }, [userId]);
-
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <AppRoutes userId={userId} onUserIdChange={setUserId} onSignOut={() => setUserId("")} />
-    </BrowserRouter>
+    <AuthProvider adapter={authAdapter}>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

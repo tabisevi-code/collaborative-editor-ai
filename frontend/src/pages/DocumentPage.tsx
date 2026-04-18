@@ -11,6 +11,7 @@ import { PagedPlainTextEditor, type PagedPlainTextEditorHandle } from "../compon
 import { PermissionsPanel } from "../components/PermissionsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { VersionHistoryPanel } from "../components/VersionHistoryPanel";
+import type { DocumentEditorAdapter } from "../lib/documentEditor";
 import { applyToolbarAction, type ToolbarAction, type ToolbarSelection } from "../lib/richTextToolbar";
 import {
   isViewerRole,
@@ -22,12 +23,14 @@ import {
 } from "./documentPageUtils";
 import type { ApiClient } from "../services/api";
 import { createAiService, type AiSelectionSnapshot } from "../services/ai";
+import type { DashboardService } from "../services/dashboard";
 import { ApiError, type GetDocumentResponse, type TextSelection } from "../types/api";
 
 interface DocumentPageProps {
   apiClient: ApiClient;
+  dashboardService: DashboardService;
   userId: string;
-  onUserIdChange(nextValue: string): void;
+  displayName: string;
   onSignOut(): void;
 }
 
@@ -38,7 +41,7 @@ const AUTO_SAVE_DELAY_MS = 1200;
  * The REST document snapshot is still critical for permissions, save/version
  * metadata, and recovery paths such as conflicts or revert.
  */
-export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: DocumentPageProps) {
+export function DocumentPage({ apiClient, dashboardService, userId, displayName, onSignOut }: DocumentPageProps) {
   const { documentId = "" } = useParams();
   const navigate = useNavigate();
   const [document, setDocument] = useState<GetDocumentResponse | null>(null);
@@ -65,6 +68,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
   const historyRef = useRef<string[]>([""]);
   const historyIndexRef = useRef(0);
   const aiService = createAiService(apiClient, userId);
+  const editorAdapterRef = useRef<DocumentEditorAdapter | null>(null);
   const realtimeDocument = useRealtimeDocument({
     apiClient,
     document,
@@ -89,6 +93,31 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
   const canRevert = realtimeDocument.role === "owner";
   const collaboratorCount = realtimeDocument.remotePeers.length;
   const realtimeStatus = toRealtimeStatusLabel(realtimeDocument.realtimeState, collaboratorCount);
+
+  editorAdapterRef.current = {
+    focus() {
+      editorRef.current?.focus();
+    },
+    getContent() {
+      return visibleContent;
+    },
+    setContent(nextValue) {
+      applyVisibleContent(nextValue, "editor-adapter:set-content", { recordHistory: true });
+    },
+    getSelection() {
+      return editorRef.current?.getSelection() ?? selection;
+    },
+    setSelection(nextSelection) {
+      syncSelection(nextSelection, visibleContent);
+    },
+    replaceSelection(targetSelection, replacement) {
+      return (
+        visibleContent.slice(0, targetSelection.start) +
+        replacement +
+        visibleContent.slice(targetSelection.end)
+      );
+    },
+  };
 
   function resetEditorHistory(nextValue: string) {
     historyRef.current = [nextValue];
@@ -168,12 +197,16 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
       setDraftTitle(fetched.title);
       setFallbackContent(fetched.content);
       resetEditorHistory(fetched.content);
+      await dashboardService.rememberDocument(userId, fetched);
 
       if (reloadCollaboration) {
         realtimeDocument.applyRemoteReset(fetched.content);
       }
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN_ERROR", "unknown error");
+      if (apiError.status === 401) {
+        onSignOut();
+      }
       setLoadErrorCode(apiError.code);
       setErrorMessage(
         apiError.status === 404 ? "This document no longer exists. Returning to the home page..." : mapDocumentError(apiError)
@@ -248,7 +281,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
   async function recordAiFeedback(
     jobId: string | null,
     disposition: "applied_full" | "applied_partial" | "rejected",
-    feedback?: { appliedText?: string; appliedRange?: TextSelection }
+    feedback?: { appliedText?: string; appliedRange?: TextSelection; documentId?: string; edited?: boolean }
   ) {
     if (!jobId) {
       return;
@@ -331,6 +364,9 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
       }
 
       const mapped = mapSaveError(error);
+      if (error instanceof ApiError && error.status === 401) {
+        onSignOut();
+      }
       setSaveState("error");
       setSaveErrorMessage(mapped.message);
       setHasStaleRevisionConflict(mapped.stale);
@@ -339,7 +375,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
   }
 
   function captureSelection() {
-    const editor = editorRef.current;
+    const editor = editorAdapterRef.current;
     if (!editor) {
       return;
     }
@@ -370,8 +406,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
 
       nextContent = realtimeDocument.getText();
     } else {
-      nextContent =
-        visibleContent.slice(0, targetSelection.start) + payload.text + visibleContent.slice(targetSelection.end);
+      nextContent = editorAdapterRef.current?.replaceSelection(targetSelection, payload.text) || visibleContent;
       applyVisibleContent(nextContent, "ai-apply", { recordHistory: true });
     }
 
@@ -392,6 +427,8 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
           start: targetSelection.start,
           end: targetSelection.start + payload.text.length,
         },
+        documentId,
+        edited: payload.edited,
       });
     }
   }
@@ -441,7 +478,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
       return;
     }
 
-    const currentSelection = editorRef.current?.getSelection() ?? selection;
+    const currentSelection = editorAdapterRef.current?.getSelection() ?? selection;
     const result = applyToolbarAction(visibleContent, currentSelection, action);
     applyVisibleContent(result.value, `toolbar:${action}`, { recordHistory: true });
     syncSelection(result.selection, result.value);
@@ -456,7 +493,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange, onSignOut }: D
         onTitleChange={setDraftTitle}
         saveState={saveState}
         userId={userId}
-        onUserIdChange={onUserIdChange}
+        displayName={displayName}
         onSignOut={onSignOut}
         realtimeStatus={realtimeStatus}
         onSave={handleSave}

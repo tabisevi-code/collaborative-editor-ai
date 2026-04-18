@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type { ApiClient } from "../services/api";
+import type { DashboardService } from "../services/dashboard";
 import { ApiError, type GetDocumentResponse } from "../types/api";
 import { DocumentPage } from "./DocumentPage";
 
@@ -45,7 +46,16 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   };
 }
 
-function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
+function createDashboardServiceMock(overrides: Partial<DashboardService> = {}): DashboardService {
+  return {
+    listDocuments: vi.fn(async () => ({ owned: [], shared: [] })),
+    rememberCreatedDocument: vi.fn(async () => {}),
+    rememberDocument: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
+function renderDocumentPage(apiClient: ApiClient, dashboardService = createDashboardServiceMock(), userId = "user_1") {
   return render(
     <MemoryRouter
       initialEntries={["/documents/doc_123"]}
@@ -55,7 +65,15 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
         <Route path="/" element={<div>Home Route</div>} />
         <Route
           path="/documents/:documentId"
-          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={vi.fn()} onSignOut={vi.fn()} />}
+          element={
+            <DocumentPage
+              apiClient={apiClient}
+              dashboardService={dashboardService}
+              userId={userId}
+              displayName="User One"
+              onSignOut={vi.fn()}
+            />
+          }
         />
       </Routes>
     </MemoryRouter>
@@ -105,11 +123,10 @@ describe("DocumentPage", () => {
       }) satisfies GetDocumentResponse),
     });
 
-    renderDocumentPage(apiClient, "user_2");
-    await resolveRealtimeConnection("Read only text");
+    renderDocumentPage(apiClient, createDashboardServiceMock(), "user_2");
 
     await waitFor(() => {
-      expect(screen.getByText(/viewer access/i)).toBeInTheDocument();
+      expect(screen.getByText("View-only")).toBeInTheDocument();
     });
 
     expect(getPageEditor()).toHaveAttribute("contenteditable", "false");

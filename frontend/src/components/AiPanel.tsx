@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { AiAction, AiJobResponse } from "../types/api";
-import type { AiJobStatus, AiSelectionSnapshot, AiService } from "../services/ai";
+
+import type { AiAction } from "../types/api";
+import type { AiHistoryItem, AiSelectionSnapshot, AiService } from "../services/ai";
 import { ApiError } from "../types/api";
 
 export interface AiApplyPayload {
@@ -8,6 +9,7 @@ export interface AiApplyPayload {
   mode: "full" | "partial";
   jobId: string | null;
   targetSelection: AiSelectionSnapshot["selection"];
+  edited: boolean;
 }
 
 interface AiPanelProps {
@@ -36,79 +38,97 @@ function mapAiError(error: unknown): string {
     if (error.status === 404) return "AI service is not yet available on this backend.";
     return error.message || "AI request failed.";
   }
+
   return "Unexpected error. Please try again.";
 }
 
-function formatJobStatus(status: AiJobStatus | null): string {
-  if (status === "PENDING") return "Queued for processing";
-  if (status === "RUNNING") return "Generating suggestion";
-  if (status === "SUCCEEDED") return "Suggestion ready";
-  if (status === "FAILED") return "Generation failed";
+type AiPanelPhase = "idle" | "streaming" | "completed" | "cancelled" | "error";
+
+function formatJobStatus(phase: AiPanelPhase): string {
+  if (phase === "streaming") return "Streaming suggestion";
+  if (phase === "completed") return "Suggestion ready";
+  if (phase === "cancelled") return "Generation cancelled";
+  if (phase === "error") return "Generation failed";
   return "Ready to run";
 }
 
 export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply, onReject, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
-  const [phase, setPhase] = useState<"idle" | "loading" | "result" | "error">("idle");
-  const [result, setResult] = useState<AiJobResponse | null>(null);
+  const [phase, setPhase] = useState<AiPanelPhase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<AiJobStatus | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [editableSuggestion, setEditableSuggestion] = useState("");
+  const [generatedSuggestion, setGeneratedSuggestion] = useState("");
   const [suggestionSelection, setSuggestionSelection] = useState<{ start: number; end: number } | null>(null);
+  const [historyItems, setHistoryItems] = useState<AiHistoryItem[]>([]);
   const suggestionRef = useRef<HTMLTextAreaElement | null>(null);
+  const activeSessionRef = useRef<{ cancel(): void } | null>(null);
+
+  async function loadHistory() {
+    const items = await aiService.listHistory(documentId);
+    setHistoryItems(items);
+  }
 
   useEffect(() => {
-    const nextSuggestion = result?.output || result?.proposedText || "";
-    setEditableSuggestion(nextSuggestion);
-    setSuggestionSelection(null);
-  }, [result]);
+    void loadHistory();
+  }, [aiService, documentId]);
+
+  useEffect(() => {
+    return () => {
+      activeSessionRef.current?.cancel();
+    };
+  }, []);
 
   async function handleRun() {
     if (!selectedText.trim()) return;
 
-    setPhase("loading");
+    activeSessionRef.current?.cancel();
+    setPhase("streaming");
     setErrorMessage(null);
-    setResult(null);
-    setJobStatus(null);
     setJobId(null);
+    setEditableSuggestion("");
+    setGeneratedSuggestion("");
+    setSuggestionSelection(null);
 
     try {
-      let job: AiJobResponse;
-
-      if (action === "rewrite") {
-        job = await aiService.requestRewrite(documentId, snapshot);
-      } else if (action === "summarize") {
-        job = await aiService.requestSummarize(documentId, snapshot);
-      } else {
-        job = await aiService.requestTranslate(documentId, snapshot, targetLanguage);
-      }
-
-      setJobId(job.jobId);
-      setJobStatus(job.status);
-
-      if (job.status === "SUCCEEDED") {
-        setResult(job);
-        setJobStatus("SUCCEEDED");
-        setPhase("result");
-        return;
-      }
-
-      const polled = await aiService.pollJobUntilDone(job.jobId, {
-        onStatusChange(nextJob) {
-          setJobStatus(nextJob.status);
-        },
+      const session = await aiService.startStream({
+        documentId,
+        ...snapshot,
+        action,
+        targetLanguage,
       });
-      setResult(polled);
-      setJobStatus(polled.status);
-      setPhase(polled.status === "SUCCEEDED" ? "result" : "error");
+      activeSessionRef.current = session;
+      setJobId(session.jobId);
 
-      if (polled.status === "FAILED") {
-        setErrorMessage(polled.errorMessage || "AI job failed.");
+      let finalText = "";
+      for await (const chunk of session.stream) {
+        if (chunk.type === "token") {
+          finalText += chunk.text || "";
+          setEditableSuggestion(finalText);
+          continue;
+        }
+
+        if (chunk.type === "error") {
+          setErrorMessage(chunk.errorMessage || "AI generation failed.");
+          setPhase("error");
+          await loadHistory();
+          return;
+        }
+
+        if (chunk.type === "done") {
+          const completedText = chunk.text || finalText;
+          setGeneratedSuggestion(completedText);
+          setEditableSuggestion(completedText);
+          setPhase("completed");
+          await loadHistory();
+          return;
+        }
       }
+
+      setPhase("cancelled");
+      await loadHistory();
     } catch (error) {
-      setJobStatus("FAILED");
       setErrorMessage(mapAiError(error));
       setPhase("error");
     }
@@ -131,16 +151,23 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
       mode,
       jobId,
       targetSelection: snapshot.selection,
+      edited: editableSuggestion !== generatedSuggestion,
     });
     onClose();
   }
 
   async function handleReject() {
     await onReject(jobId);
+    await loadHistory();
     onClose();
   }
 
-  const canRun = selectedText.trim().length > 0 && phase !== "loading";
+  function handleCancel() {
+    activeSessionRef.current?.cancel();
+    setPhase("cancelled");
+  }
+
+  const canRun = selectedText.trim().length > 0 && phase !== "streaming";
   const hasPartialSelection = Boolean(
     suggestionSelection && suggestionSelection.end > suggestionSelection.start && editableSuggestion.length > 0
   );
@@ -160,29 +187,28 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
         </div>
 
         <div className="side-panel-body">
-          {/* Action tabs */}
           <div>
             <p className="field-label" style={{ marginBottom: "0.5rem" }}>Action</p>
             <div className="ai-action-tabs">
-              {ACTIONS.map((a) => (
+              {ACTIONS.map((item) => (
                 <button
-                  key={a.value}
-                  className={`ai-tab${action === a.value ? " active" : ""}`}
+                  key={item.value}
+                  className={`ai-tab${action === item.value ? " active" : ""}`}
                   onClick={() => {
-                    setAction(a.value);
+                    setAction(item.value);
                     setPhase("idle");
-                    setResult(null);
                     setEditableSuggestion("");
+                    setGeneratedSuggestion("");
                     setSuggestionSelection(null);
+                    setErrorMessage(null);
                   }}
                 >
-                  {a.emoji} {a.label}
+                  {item.emoji} {item.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Target language (translate only) */}
           {action === "translate" && (
             <div className="field">
               <label className="field-label" htmlFor="target-lang">Target language</label>
@@ -190,16 +216,15 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
                 id="target-lang"
                 className="text-input"
                 value={targetLanguage}
-                onChange={(e) => setTargetLanguage(e.target.value)}
+                onChange={(event) => setTargetLanguage(event.target.value)}
               >
-                {LANGUAGES.map((l) => (
-                  <option key={l} value={l}>{l}</option>
+                {LANGUAGES.map((language) => (
+                  <option key={language} value={language}>{language}</option>
                 ))}
               </select>
             </div>
           )}
 
-          {/* Selection preview */}
           <div className="field">
             <p className="field-label">Selected text</p>
             {selectedText.trim() ? (
@@ -214,26 +239,29 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
           <div className="field ai-job-status-card">
             <p className="field-label">Job status</p>
             <div className="ai-job-status-row">
-              <strong>{formatJobStatus(jobStatus)}</strong>
+              <strong>{formatJobStatus(phase)}</strong>
               {jobId && <span className="field-hint">{jobId}</span>}
             </div>
-            {phase === "loading" && (
+            {phase === "streaming" && (
               <p className="field-hint">
-                The backend is running an async job and polling for the final suggestion.
+                Rendering the draft token by token through the streaming adapter.
+              </p>
+            )}
+            {phase === "cancelled" && (
+              <p className="field-hint">
+                You can run the same request again or switch to a different AI action.
               </p>
             )}
           </div>
 
-          {/* Loading state */}
-          {phase === "loading" && (
+          {phase === "streaming" && (
             <div className="ai-spinner">
               <div className="spinner-ring" />
-              <span>{formatJobStatus(jobStatus)}</span>
+              <span>{formatJobStatus(phase)}</span>
             </div>
           )}
 
-          {/* Result */}
-          {phase === "result" && editableSuggestion && (
+          {(phase === "streaming" || phase === "completed" || phase === "cancelled") && editableSuggestion && (
             <div className="field ai-review-grid">
               <div>
                 <p className="field-label">Before</p>
@@ -260,22 +288,43 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
                 />
               </div>
               <p className="field-hint">
-                Review or edit the suggestion before applying. "Apply selection" uses only the highlighted portion of the AI output.
+                Review or edit the suggestion before applying. "Apply selection" uses only the highlighted portion.
               </p>
             </div>
           )}
 
-          {/* Error */}
           {phase === "error" && errorMessage && (
             <div className="status-banner status-error" role="alert">
               <strong>AI request failed</strong>
               <p>{errorMessage}</p>
             </div>
           )}
+
+          <div className="field ai-history-card">
+            <div className="dashboard-section-header">
+              <h3>AI history</h3>
+              <span>{historyItems.length}</span>
+            </div>
+            {historyItems.length === 0 ? (
+              <p className="field-hint">Completed AI runs will appear here.</p>
+            ) : (
+              <div className="ai-history-list">
+                {historyItems.map((item) => (
+                  <div key={item.id} className="ai-history-item">
+                    <div className="ai-history-item-top">
+                      <strong>{item.promptLabel}</strong>
+                      <span>{item.status}</span>
+                    </div>
+                    <p>{item.outputPreview || "No preview saved yet."}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="side-panel-footer">
-          {phase === "result" ? (
+          {phase === "completed" ? (
             <>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => void handleApply("full")}>
                 Apply all
@@ -291,18 +340,22 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
                 Reject
               </button>
             </>
+          ) : phase === "streaming" ? (
+            <>
+              <button className="btn btn-ai" style={{ flex: 1 }} disabled>
+                Streaming...
+              </button>
+              <button className="btn btn-secondary" onClick={handleCancel}>
+                Cancel stream
+              </button>
+            </>
           ) : (
             <>
-              <button
-                className="btn btn-ai"
-                style={{ flex: 1 }}
-                onClick={handleRun}
-                disabled={!canRun}
-              >
-                {phase === "loading" ? "Running…" : "Run AI"}
+              <button className="btn btn-ai" style={{ flex: 1 }} onClick={handleRun} disabled={!canRun}>
+                Run AI
               </button>
               <button className="btn btn-secondary" onClick={onClose}>
-                Cancel
+                Close
               </button>
             </>
           )}
