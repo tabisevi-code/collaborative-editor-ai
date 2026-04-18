@@ -34,4 +34,13 @@ backend/data/
 
 # Local report and assignment drafting artifacts
 AI1220_assignment (3).pdf
+AI1220_assignment2.pdf
 software assignment.md
+
+# Python / FastAPI local artifacts
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+backend_fastapi/*.egg-info/
+backend_fastapi/data/
+data/

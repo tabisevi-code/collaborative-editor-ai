@@ -1,12 +1,16 @@
+.PHONY: install run test demo fastapi-dev
+
 install:
-	cd backend && npm install
-	cd frontend && npm install || true
+	npm run install:all
+
+run:
+	./run.sh current
 
 test:
-	cd backend && npm test
+	./run.sh test
 
-run-backend:
-	cd backend && npm start
+demo:
+	./run.sh demo
 
-run-frontend:
-	cd frontend && npm start || echo "Frontend not implemented yet"
+fastapi-dev:
+	cd backend_fastapi && uvicorn app.main:app --reload --port 8000
