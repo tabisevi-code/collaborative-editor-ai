@@ -1,68 +1,48 @@
 "use strict";
 
-function buildPromptLabel(input) {
-  if (input.action === "translate") {
-    return `Translate to ${input.targetLanguage || "target language"}`;
+const ACTION_TO_SYSTEM_PROMPT = Object.freeze({
+  rewrite:
+    "You rewrite the selected text only. Return only the rewritten text with no explanation, no quotes, and no preamble.",
+  summarize:
+    "You summarize the selected text only. Return only the summary text with no explanation, no title, and no preamble.",
+  translate:
+    "You translate the selected text only. Return only the translated text with no explanation, no quotes, and no preamble.",
+});
+
+function formatContextLabel(label, value) {
+  if (!value) {
+    return `${label}: (empty)`;
   }
 
-  if (input.action === "summarize") {
-    return "Summarize selection";
-  }
-
-  return input.instruction || "Rewrite selection";
+  return `${label}:\n${value}`;
 }
 
-function buildSystemPrompt(input) {
-  if (input.action === "summarize") {
-    return "You are a concise writing assistant. Summarize the selected passage faithfully and clearly. Return only the summary text with no labels or commentary.";
-  }
-
-  if (input.action === "translate") {
-    return "You are a translation assistant. Translate the selected passage while preserving meaning and tone. Return only the translated text with no labels or commentary.";
-  }
-
-  return "You are a writing assistant. Rewrite the selected passage according to the user's instruction while preserving intent. Return only the rewritten text with no labels or commentary.";
-}
-
-function buildUserPrompt(input) {
-  const sections = [`Selected text:\n${input.selectedText}`];
-
-  if (input.contextBefore) {
-    sections.push(`Context before:\n${input.contextBefore}`);
-  }
-
-  if (input.contextAfter) {
-    sections.push(`Context after:\n${input.contextAfter}`);
-  }
-
-  if (input.action === "rewrite") {
-    sections.push(`Instruction:\n${input.instruction || "Rewrite this selection."}`);
-  }
-
-  if (input.action === "summarize") {
-    sections.push(`Instruction:\n${input.instruction || "Summarize the selected text clearly and accurately."}`);
-  }
-
-  if (input.action === "translate") {
-    sections.push(`Target language:\n${input.targetLanguage || "English"}`);
-    if (input.instruction) {
-      sections.push(`Additional instruction:\n${input.instruction}`);
-    }
-  }
-
-  return sections.join("\n\n");
-}
-
+/**
+ * The prompt shape makes context explicit so future providers receive the same
+ * intent regardless of transport format, while still obeying the requirement
+ * to send only the selected text plus minimal surrounding context.
+ */
 function buildPromptPayload(input) {
+  const instructionLine =
+    input.action === "translate"
+      ? `Target language: ${input.targetLanguage}`
+      : `Instruction: ${input.instruction || "Use the default behavior for this action."}`;
+
+  const userPrompt = [
+    `Action: ${input.action}`,
+    instructionLine,
+    formatContextLabel("Context before", input.contextBefore),
+    formatContextLabel("Selected text", input.selectedText),
+    formatContextLabel("Context after", input.contextAfter),
+    "Important: Respond with only the transformed selected text.",
+  ].join("\n\n");
+
   return {
-    systemPrompt: buildSystemPrompt(input),
-    userPrompt: buildUserPrompt(input),
+    systemPrompt: ACTION_TO_SYSTEM_PROMPT[input.action],
+    userPrompt,
   };
 }
 
 module.exports = {
-  buildPromptLabel,
   buildPromptPayload,
-  buildSystemPrompt,
-  buildUserPrompt,
 };

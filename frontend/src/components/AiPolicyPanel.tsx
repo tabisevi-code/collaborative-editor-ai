@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
-
 import type { ApiClient } from "../services/api";
-import { ApiError, type AiPolicyResponse, type AiUsageResponse, type DocumentRole } from "../types/api";
+import { ApiError, type AiPolicyResponse, type DocumentRole } from "../types/api";
 
 interface AiPolicyPanelProps {
   documentId: string;
@@ -23,7 +22,6 @@ function mapAiPolicyError(error: unknown): string {
 
 export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPolicyPanelProps) {
   const [policy, setPolicy] = useState<AiPolicyResponse | null>(null);
-  const [usage, setUsage] = useState<AiUsageResponse | null>(null);
   const [phase, setPhase] = useState<"loading" | "loaded" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -35,12 +33,8 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
     setSuccessMessage(null);
 
     try {
-      const [nextPolicy, nextUsage] = await Promise.all([
-        apiClient.getAiPolicy(documentId, userId),
-        apiClient.getAiUsage(documentId, userId),
-      ]);
+      const nextPolicy = await apiClient.getAiPolicy(documentId, userId);
       setPolicy(nextPolicy);
-      setUsage(nextUsage);
       setPhase("loaded");
     } catch (error) {
       setErrorMessage(mapAiPolicyError(error));
@@ -89,7 +83,6 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
         userId
       );
       setPolicy(saved);
-      setUsage(await apiClient.getAiUsage(documentId, userId));
       setSuccessMessage("AI policy saved.");
     } catch (error) {
       setErrorMessage(mapAiPolicyError(error));
@@ -180,11 +173,9 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
                     )
                   }
                 />
-                {usage && (
-                  <p className="field-hint">
-                    Current usage: {usage.usedToday}/{usage.dailyQuota} used today · {usage.remainingToday} remaining
-                  </p>
-                )}
+                <p className="field-hint">
+                  Current usage: {policy.usedToday}/{policy.dailyQuota} used today · {policy.remainingToday} remaining
+                </p>
               </div>
             </>
           )}

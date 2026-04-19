@@ -54,7 +54,7 @@ that through:
 \begin{itemize}
   \item a monorepo matching the documented service decomposition,
   \item root orchestration scripts: \texttt{install:all}, \texttt{dev:all}, \texttt{test:all},
-  and \texttt{demo:reset},
+  and \texttt{dev:clean},
   \item service-specific READMEs and a root README,
   \item contract notes and OpenAPI for backend routes,
   \item a deterministic smoke test that validates backend + realtime wiring.
@@ -99,8 +99,8 @@ Recommended LM Studio setup for the delivered MVP:
   \item Verify that the model server responds at \texttt{/v1/models}.
   \item Start the application with either:
   \begin{itemize}
-    \item \texttt{npm run demo:reset} (auto-detects LM Studio when available), or
-    \item \texttt{AI\_PROVIDER=lmstudio npm run demo:reset} to force the LM Studio path.
+    \item \texttt{npm run dev:clean} (auto-detects LM Studio when available), or
+    \item \texttt{AI\_PROVIDER=lmstudio npm run dev:clean} to force the LM Studio path.
   \end{itemize}
 \end{enumerate}
 
@@ -112,7 +112,7 @@ Practical verification commands are:
 
 \begin{lstlisting}[language={}]
 curl http://127.0.0.1:1234/v1/models
-AI_PROVIDER=lmstudio npm run demo:reset
+AI_PROVIDER=lmstudio npm run dev:clean
 \end{lstlisting}
 
 If LM Studio is unavailable, the rest of the system --- editing, collaboration, versioning, permissions,

@@ -1,0 +1,38 @@
+\chapter{Testing And Quality}
+
+The repository includes multiple verification layers because the assignment explicitly weights testing and
+quality.
+
+\section{Automated Coverage}
+
+\begin{itemize}
+  \item \textbf{Backend}: pytest coverage for auth, permissions, documents, sessions, exports, AI, and
+  reset flows.
+  \item \textbf{Frontend}: Vitest/React Testing Library coverage for auth pages, dashboard, management
+  panels, AI panel behaviour, editor-related workflows, and realtime client behaviour.
+  \item \textbf{Realtime}: dedicated tests for authenticated websocket sessions, conflict resolution,
+  viewer rejection, and backend-driven revert propagation.
+  \item \textbf{Integration}: a root smoke test verifies the FastAPI backend and realtime relay working
+  together under shared SQLite state.
+  \item \textbf{Browser}: Playwright coverage for end-to-end happy paths, plus a headless stale-AI-apply
+  regression.
+\end{itemize}
+
+The root command below runs the full repository verification path:
+
+\begin{lstlisting}[language={}]
+npm run test:all
+\end{lstlisting}
+
+\section{Operational Quality}
+
+The project also includes setup-quality features intended to keep the runtime reproducible:
+
+\begin{itemize}
+  \item root \texttt{Makefile} and \texttt{run.sh} wrappers,
+  \item \texttt{.env.example} files,
+  \item FastAPI OpenAPI docs,
+  \item reproducible local startup,
+  \item Docker Compose configuration,
+  \item repository-level docs describing contracts and deviations.
+\end{itemize}

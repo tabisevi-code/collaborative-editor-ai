@@ -1,0 +1,39 @@
+\chapter{System Overview}
+
+The delivered system follows the brief's required technology stack: React on the frontend, FastAPI on the
+backend, JWT authentication, and streamed AI responses. The repository is organised as a monorepo with
+the following runtime pieces:
+
+\begin{itemize}
+  \item \texttt{frontend/}: React + TypeScript application for authentication, dashboard, document editing,
+  AI interactions, sharing, and export controls.
+  \item \texttt{backend\_fastapi/}: FastAPI service for JWT auth, document CRUD, permissions,
+  share-by-link, export jobs, AI streaming, and version history.
+  \item \texttt{realtime/}: Node + Yjs relay handling websocket collaboration and presence.
+  \item \texttt{shared/}: reusable session-token helpers shared between FastAPI and realtime.
+\end{itemize}
+
+The final implementation keeps the earlier Express backend only as migration/reference history. It is not
+the Assignment 2 runtime path. FastAPI is the authoritative backend for the submitted system.
+
+\section{Delivered Feature Surface}
+
+The baseline assignment requirements are all covered in the integrated branch:
+
+\begin{itemize}
+  \item registration, login, refresh, logout, and password reset,
+  \item document CRUD with metadata,
+  \item rich-text editing with autosave,
+  \item version history and restore,
+  \item owner/editor/viewer access control,
+  \item sharing by direct grant and share-link,
+  \item realtime collaboration across browser sessions,
+  \item AI rewrite, summarize, and translate,
+  \item streamed AI output with cancellation,
+  \item AI history, feedback, and quota visibility,
+  \item PDF and DOCX export,
+  \item automated backend, frontend, realtime, integration, and browser tests.
+\end{itemize}
+
+Beyond the baseline, the implementation includes bonus-tier items such as cursor/selection tracking,
+share-by-link with revocation, partial AI acceptance, and Playwright end-to-end coverage.

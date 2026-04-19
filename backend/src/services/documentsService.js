@@ -26,29 +26,6 @@ function ensureDocumentAccess(repository, user, documentId, minimumRole = "viewe
 }
 
 function createDocumentsService({ repository, contentMaxBytes }) {
-  function getAiUsage(user, documentId) {
-    const document = ensureDocumentAccess(repository, user, documentId, "viewer");
-    const policy = repository.getAiPolicy(documentId);
-    const today = new Date().toISOString().slice(0, 10);
-    const usedToday = repository.countAiJobsToday(documentId, user.userId, today);
-    const remainingToday = Math.max(policy.dailyQuota - usedToday, 0);
-
-    return {
-      documentId,
-      aiEnabled: policy.aiEnabled,
-      dailyQuota: policy.dailyQuota,
-      usedToday,
-      remainingToday,
-      allowedRolesForAI: policy.allowedRolesForAI,
-      currentUserRole: document.role,
-      canUseAi:
-        policy.aiEnabled &&
-        policy.allowedRolesForAI.includes(document.role) &&
-        remainingToday > 0,
-      updatedAt: policy.updatedAt,
-    };
-  }
-
   return {
     createDocument(user, payload) {
       const bytes = Buffer.byteLength(payload.content || "", "utf8");
@@ -211,15 +188,6 @@ function createDocumentsService({ repository, contentMaxBytes }) {
         allowedRolesForAI: payload.allowedRolesForAI,
         dailyQuota: payload.dailyQuota,
       });
-    },
-
-    listAiHistory(user, documentId) {
-      ensureDocumentAccess(repository, user, documentId, "viewer");
-      return repository.listAiHistory(documentId);
-    },
-
-    getAiUsage(user, documentId) {
-      return getAiUsage(user, documentId);
     },
   };
 }

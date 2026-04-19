@@ -198,15 +198,6 @@ export interface AiUsageResponse {
   canUseAi: boolean;
 }
 
-export interface AiJobResponse {
-  jobId: string;
-  statusUrl: string;
-  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
-  output?: string;
-  proposedText?: string;
-  errorMessage?: string;
-}
-
 export type AiAction = "rewrite" | "summarize" | "translate";
 
 export interface TextSelection {

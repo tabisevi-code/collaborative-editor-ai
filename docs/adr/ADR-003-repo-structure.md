@@ -1,3 +1,6 @@
+> Historical architecture decision record from earlier design stages.
+> The final Assignment 2 runtime uses `backend_fastapi/` as the authoritative backend path; this ADR remains only as design history.
+
 ADR-003: Repository Structure Strategy 
 Context
 The project consists of multiple logical components:
@@ -49,4 +52,3 @@ Rejected due to increased complexity for a small academic team.
 Hybrid approach
 Backend services in one repo, frontend separate.
 Rejected due to shared API contract complexity. 
-

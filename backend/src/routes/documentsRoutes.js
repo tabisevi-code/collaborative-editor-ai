@@ -134,24 +134,6 @@ function documentsRoutes({ documentsService }) {
     }
   });
 
-  router.get("/documents/:documentId/ai-history", (req, res, next) => {
-    try {
-      const response = documentsService.listAiHistory(req.auth, req.params.documentId);
-      return res.status(200).json(response);
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  router.get("/documents/:documentId/ai-usage", (req, res, next) => {
-    try {
-      const response = documentsService.getAiUsage(req.auth, req.params.documentId);
-      return res.status(200).json(response);
-    } catch (error) {
-      return next(error);
-    }
-  });
-
   router.put("/documents/:documentId/ai-policy", validateBody(UpdateAiPolicySchema), (req, res, next) => {
     try {
       const response = documentsService.updateAiPolicy(req.auth, req.params.documentId, req.validatedBody);

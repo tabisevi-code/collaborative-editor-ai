@@ -1,3 +1,6 @@
+> Historical architecture decision record from earlier design stages.
+> Not authoritative for the final Assignment 2 submission. See `README.md`, `DEVIATIONS.md`, and `docs/assignment2-current-state.md` for current behavior.
+
 ADR-001: Real-time collaboration consistency approach (CRDT vs OT)
 - Status: Proposed (confirm in meeting)
 - Context:

@@ -57,13 +57,7 @@ export interface AiService {
   recordFeedback(
     jobId: string,
     disposition: AiJobFeedbackDisposition,
-    feedback?: {
-      appliedText?: string;
-      appliedRange?: TextSelection;
-      documentId?: string;
-      action?: AiHistoryItem["action"];
-      edited?: boolean;
-    }
+    feedback?: { appliedText?: string; appliedRange?: TextSelection; documentId?: string; action?: AiHistoryItem["action"]; edited?: boolean }
   ): Promise<AiJobFeedbackResponse>;
 }
 
@@ -72,10 +66,7 @@ function toHistoryItem(item: AiHistoryItemResponse): AiHistoryItem {
 }
 
 function parseSseEvent(block: string): { event: string; data: Record<string, unknown> } | null {
-  const lines = block
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0) {
     return null;
   }
@@ -96,9 +87,7 @@ function parseSseEvent(block: string): { event: string; data: Record<string, unk
   }
 }
 
-function mapStreamPayload(
-  request: AiStreamRequest
-): RewriteAiStreamRequest | SummarizeAiStreamRequest | TranslateAiStreamRequest {
+function mapStreamPayload(request: AiStreamRequest): RewriteAiStreamRequest | SummarizeAiStreamRequest | TranslateAiStreamRequest {
   if (request.action === "translate") {
     return {
       documentId: request.documentId,
@@ -135,17 +124,12 @@ function mapStreamPayload(
   };
 }
 
-export function createAiService(apiClient: ApiClient, userId?: string): AiService {
+export function createAiService(apiClient: ApiClient): AiService {
   return {
     async startStream(request) {
       const controller = new AbortController();
       let currentJobId: string | null = null;
-      const response = await apiClient.startAiStream(
-        request.action,
-        mapStreamPayload(request),
-        controller.signal,
-        userId
-      );
+      const response = await apiClient.startAiStream(request.action, mapStreamPayload(request), controller.signal);
 
       const stream = (async function* (): AsyncIterable<AiStreamChunk> {
         const reader = response.body?.getReader();
@@ -172,8 +156,7 @@ export function createAiService(apiClient: ApiClient, userId?: string): AiServic
               continue;
             }
 
-            const nextJobId =
-              typeof parsed.data.jobId === "string" ? parsed.data.jobId : currentJobId;
+            const nextJobId: string | null = typeof parsed.data.jobId === "string" ? parsed.data.jobId : currentJobId;
             if (nextJobId) {
               currentJobId = nextJobId;
             }
@@ -216,31 +199,27 @@ export function createAiService(apiClient: ApiClient, userId?: string): AiServic
         cancel() {
           controller.abort();
           if (currentJobId) {
-            void apiClient.cancelAiJob(currentJobId, userId);
+            void apiClient.cancelAiJob(currentJobId);
           }
         },
       };
     },
 
     async listHistory(documentId) {
-      const items = await apiClient.listAiHistory(documentId, userId);
+      const items = await apiClient.listAiHistory(documentId);
       return items.map(toHistoryItem);
     },
 
     getUsage(documentId) {
-      return apiClient.getAiUsage(documentId, userId);
+      return apiClient.getAiUsage(documentId);
     },
 
     async recordFeedback(jobId, disposition, feedback) {
-      return apiClient.recordAiJobFeedback(
-        jobId,
-        {
-          disposition,
-          appliedText: feedback?.appliedText,
-          appliedRange: feedback?.appliedRange,
-        },
-        userId
-      );
+      return apiClient.recordAiJobFeedback(jobId, {
+        disposition,
+        appliedText: feedback?.appliedText,
+        appliedRange: feedback?.appliedRange,
+      });
     },
   };
 }

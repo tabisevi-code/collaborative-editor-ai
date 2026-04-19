@@ -1,5 +1,7 @@
 \chapter{Appendix}
 
+\textit{Note: this appendix belongs to the historical Assignment 1 report package kept in the repository for traceability. The current Assignment 2 runnable system is documented separately in the repository root and the Assignment 2 docs.}
+
 \section{Submission Artifact Inventory}
 
 The final submission package is composed of three coordinated artifacts:
@@ -43,7 +45,7 @@ the same design process rather than three unrelated deliverables.
 The recommended live demo sequence is:
 
 \begin{enumerate}
-  \item Run \texttt{npm run demo:reset} from the repository root.
+  \item Run \texttt{npm run dev:all} from the repository root.
   \item Open the frontend at \texttt{http://localhost:5173}.
   \item Sign in as \texttt{user\_1} and create a new document.
   \item Open the same document in a second browser/tab and switch the user to \texttt{user\_2}.
@@ -52,7 +54,7 @@ The recommended live demo sequence is:
   \item Pause briefly to show autosave returning the header to a saved state.
   \item Trigger an AI action, wait for the async job, then demonstrate full apply or partial apply.
   \item Open version history and demonstrate revert.
-  \item Export the document and show Swagger/OpenAPI at \texttt{http://localhost:3000/docs/}.
+  \item Export the document and show Swagger/OpenAPI at \texttt{http://localhost:8000/docs/}.
 \end{enumerate}
 
 \section{Mermaid Diagram Source Listings}
