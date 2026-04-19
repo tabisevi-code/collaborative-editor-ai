@@ -9,10 +9,6 @@ The repository is now in an Assignment 2 runnable state.
 - hashed passwords and JWT bearer auth
 - protected document list, CRUD, permissions, versions, revert, and sessions
 - realtime websocket session issuance from FastAPI
-- backend-streamed AI rewrite, summarize, and translate
-- AI cancellation, feedback, and persisted AI history
-- AI quota usage surfaced per user
-- stale AI apply is blocked when the selected source text changed under collaboration
 - backend-backed dashboard
 - rich-text editor integrated into the main document page
 - inline remote cursor and selection rendering
@@ -23,21 +19,19 @@ The repository is now in an Assignment 2 runnable state.
 - idempotent save, share-link creation, and revert routes
 - Playwright browser E2E flow
 - dedicated realtime regression tests for simultaneous insert conflicts and overlapping delete/insert conflicts
-- dedicated headless Playwright regression for stale AI apply under collaboration
 - root install/dev/test/demo scripts aligned to the final stack
 - root integration smoke test aligned to FastAPI + realtime
 
 ## Remaining Risk Areas
 
 - realtime still depends on the legacy Node schema/bootstrap module internally
-- AI provider-native token streaming is optional; backend chunk streaming is the guaranteed baseline
+- AI workstream is intentionally left reserved/unimplemented on this core branch
 
 ## Recent Hardening Notes
 
 - WebSocket auth now uses a signed subprotocol token instead of a query-string token.
 - Refresh-token rotation invalidates older access-token sessions immediately.
 - Auth/session throttling is backed by the shared SQLite database rather than process-local memory.
-- AI apply now refuses to overwrite a range if another collaborator already changed that source text.
 
 ## Submission Story
 

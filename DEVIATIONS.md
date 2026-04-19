@@ -19,16 +19,16 @@ This file tracks the remaining intentional deviations between the brief and the 
 ## 3. AI backend streaming is provider-streamed when available and backend-chunked otherwise
 
 - Brief expectation: token-by-token or chunked backend streaming.
-- Current state: FastAPI always streams to the frontend; the stub/default provider chunks on the backend, while an OpenAI-compatible provider can still be swapped in.
-- Reason: this guarantees compliant backend streaming even without a live model endpoint during evaluation.
-- Resolution status: accepted implementation choice.
+- Current state: the AI workstream is intentionally left reserved on this core branch, with placeholder routes preserved so contracts stay stable for the dedicated AI follow-up branch.
+- Reason: this branch is intentionally scoped to the non-AI backend/frontend foundation so AI can land as a separate ownership slice.
+- Resolution status: documented branch-scope deviation.
 
-## 4. PDF and DOCX exports are simulated async jobs
+## 4. PDF and DOCX exports use an async-job flow
 
 - Brief expectation: export support is optional to the core Assignment 2 requirements.
-- Current state: TXT and JSON export immediately, while PDF and DOCX follow an async-job flow with placeholder content rather than full binary rendering.
-- Reason: the coursework emphasis is on architecture, async workflows, and evaluator-visible behavior rather than document-rendering fidelity.
-- Resolution status: temporary simplification, explicitly documented.
+- Current state: TXT and JSON export immediately, while PDF and DOCX follow an async-job flow that returns real generated binary files.
+- Reason: the async delivery path is preserved to demonstrate workflow orchestration while still producing evaluator-visible downloadable outputs.
+- Resolution status: documented implementation choice.
 
 ## 5. Legacy Node backend remains in the repository
 

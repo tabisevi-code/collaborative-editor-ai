@@ -1,15 +1,15 @@
 # Collaborative Editor AI
 
-Collaborative Editor AI is the final Assignment 2 monorepo for a collaborative document editor with JWT auth, realtime collaboration, a backend-streamed AI assistant, AI history, version restore, permissions, and exports.
+Collaborative Editor AI is the Assignment 2 monorepo for a collaborative document editor with JWT auth, realtime collaboration, version restore, permissions, and exports.
 
 ## Final Stack
 
-- `backend_fastapi/` — FastAPI backend with JWT auth, documents, AI, exports, and `/docs`
+- `backend_fastapi/` — FastAPI backend with JWT auth, documents, share links, exports, and `/docs`
 - `frontend/` — React + TypeScript client
 - `realtime/` — Yjs/WebSocket relay with signed session-token auth
 - `shared/` — shared realtime session-token signing helpers
 
-Bonus-tier features included in the runnable stack:
+Bonus-tier features included in this core stack:
 
 - share-by-link with configurable role and revocation
 - optional revocation of access that was granted through a share link
@@ -17,7 +17,7 @@ Bonus-tier features included in the runnable stack:
 - browser E2E coverage with Playwright
 - real PDF export bytes
 - real DOCX export bytes
-- per-user AI quota visibility and idempotent write routes
+- idempotent write routes for save/share/revert
 
 The legacy `backend/` directory remains only as migration/reference code for the realtime service bootstrap and prior coursework history. The Assignment 2 runnable path is FastAPI-first.
 
@@ -67,12 +67,10 @@ Equivalent wrappers:
 4. Grant editor access from the owner account.
 5. Verify live collaboration.
 6. Edit rich text and observe autosave.
-7. Run an AI rewrite, summarize, or translate action.
-8. Review AI history.
-9. Create and revoke a share link.
-10. Show inline remote cursor/selection rendering in a second browser.
-11. Revert using version history.
-12. Export the document as PDF.
+7. Create and revoke a share link.
+8. Show inline remote cursor/selection rendering in a second browser.
+9. Revert using version history.
+10. Export the document as PDF or DOCX.
 
 ## Testing
 
