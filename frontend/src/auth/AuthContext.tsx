@@ -33,7 +33,13 @@ const REFRESH_THRESHOLD_MS = 60 * 1000;
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function hasWindowSessionStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  return (
+    typeof window !== "undefined" &&
+    typeof window.localStorage !== "undefined" &&
+    typeof window.localStorage.getItem === "function" &&
+    typeof window.localStorage.setItem === "function" &&
+    typeof window.localStorage.removeItem === "function"
+  );
 }
 
 function readStoredSession(): AuthSessionPayload | null {
