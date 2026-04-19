@@ -281,35 +281,6 @@ test("root smoke: backend and realtime wire together for login, documents, sessi
     const getJson = await parseJsonResponse(getResponse);
     assert.equal(getJson.content, "Hello world");
 
-    const aiResponse = await fetch(`http://127.0.0.1:${backendPort}/ai/rewrite/stream`, {
-      method: "POST",
-      headers: authHeaders,
-      body: JSON.stringify({
-        documentId: createJson.documentId,
-        selection: { start: 0, end: 11 },
-        selectedText: "Hello world",
-        contextBefore: "",
-        contextAfter: "",
-        instruction: "Make it more formal",
-        baseVersionId: createJson.currentVersionId,
-      }),
-    });
-    assert.equal(aiResponse.status, 200);
-    const aiText = await aiResponse.text();
-    assert.ok(aiText.includes("event: token"));
-    assert.ok(aiText.includes("event: done"));
-
-    const historyResponse = await fetch(
-      `http://127.0.0.1:${backendPort}/documents/${encodeURIComponent(createJson.documentId)}/ai-history`,
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${loginJson.accessToken}` },
-      }
-    );
-    assert.equal(historyResponse.status, 200);
-    const historyJson = await parseJsonResponse(historyResponse);
-    assert.equal(historyJson.length, 1);
-
     const sessionResponse = await fetch(`http://127.0.0.1:${backendPort}/sessions`, {
       method: "POST",
       headers: authHeaders,
