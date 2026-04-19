@@ -1,8 +1,25 @@
 import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 
-function npmExecutable() {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const FRONTEND_DIR = path.resolve(SCRIPT_DIR, "..");
+const VITEST_ENTRY = path.join(FRONTEND_DIR, "node_modules", "vitest", "vitest.mjs");
+const LOCALSTORAGE_FILE = path.join(FRONTEND_DIR, ".vitest-localstorage");
+
+function buildTestEnv() {
+  const existingNodeOptions = process.env.NODE_OPTIONS || "";
+  const cleanedNodeOptions = existingNodeOptions
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((value) => !value.startsWith("--localstorage-file"))
+    .join(" ");
+
+  return {
+    ...process.env,
+    NODE_OPTIONS: [cleanedNodeOptions, `--localstorage-file=${LOCALSTORAGE_FILE}`].filter(Boolean).join(" "),
+  };
 }
 
 const groups = [
@@ -31,11 +48,11 @@ const groups = [
 function runGroup(files, index) {
   return new Promise((resolve, reject) => {
     const child = spawn(
-      npmExecutable(),
-      ["exec", "--", "vitest", "run", ...files],
+      process.execPath,
+      [VITEST_ENTRY, "run", ...files],
       {
         stdio: "inherit",
-        env: process.env,
+        env: buildTestEnv(),
       }
     );
 

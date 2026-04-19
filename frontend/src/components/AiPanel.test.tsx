@@ -168,6 +168,8 @@ describe("AiPanel", () => {
       />
     );
 
+    expect(await screen.findByText(/1\/5 used today/i)).toBeInTheDocument();
+
     fireEvent.click(screen.getByTestId("ai-action-translate"));
 
     expect(screen.getByTestId("ai-target-language")).toBeInTheDocument();
