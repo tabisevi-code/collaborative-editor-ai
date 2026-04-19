@@ -25,10 +25,20 @@ async function requestJson(path, { method = "GET", headers = {}, body } = {}) {
     payload,
   });
 
+  let json = {};
+  if (result.payload) {
+    try {
+      json = JSON.parse(result.payload);
+    } catch (_error) {
+      json = {};
+    }
+  }
+
   return {
     status: result.statusCode,
     headers: result.headers,
-    json: result.payload ? JSON.parse(result.payload) : {},
+    json,
+    text: result.payload,
   };
 }
 
@@ -213,4 +223,132 @@ test("POST /ai/jobs/:jobId/feedback records a reject decision for an accessible 
 
   assert.equal(auditLog.action_type, "ai_job_feedback");
   assert.equal(JSON.parse(auditLog.metadata_json).disposition, "rejected");
+});
+
+test("POST /ai/rewrite/stream persists history and exposes usage for the document", async () => {
+  const token = await loginAs("user_1");
+  const document = await createDocument(token, { content: "Original selected text" });
+
+  const streamResult = await requestJson("/ai/rewrite/stream", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: {
+      documentId: document.documentId,
+      selection: { start: 0, end: 22 },
+      selectedText: "Original selected text",
+      contextBefore: "",
+      contextAfter: "",
+      instruction: "Make this more concise",
+      baseVersionId: document.currentVersionId,
+    },
+  });
+
+  assert.equal(streamResult.status, 200);
+  assert.match(streamResult.text, /event: token/);
+  assert.match(streamResult.text, /event: done/);
+
+  const donePayload = JSON.parse(streamResult.text.split("event: done\ndata: ")[1].split("\n\n")[0]);
+  assert.match(donePayload.jobId, /^aijob_/);
+  assert.equal(donePayload.fullText, "Rewritten content");
+
+  const historyResult = await requestJson(`/documents/${document.documentId}/ai-history`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(historyResult.status, 200);
+  assert.equal(historyResult.json[0].jobId, donePayload.jobId);
+  assert.equal(historyResult.json[0].status, "completed");
+
+  const usageResult = await requestJson(`/documents/${document.documentId}/ai-usage`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(usageResult.status, 200);
+  assert.equal(usageResult.json.usedToday, 1);
+  assert.equal(usageResult.json.remainingToday, 4);
+  assert.equal(usageResult.json.canUseAi, true);
+});
+
+test("POST /ai/jobs/:jobId/cancel returns true for an active streamed job and false after completion", async () => {
+  const token = await loginAs("user_1");
+  const document = await createDocument(token, { content: "Original selected text" });
+  const service = app.locals.context.aiService;
+  const user = { userId: "user_1", globalRole: "user" };
+
+  const activeStream = service.startRewriteStream(user, {
+    documentId: document.documentId,
+    selection: { start: 0, end: 22 },
+    selectedText: "Original selected text",
+    contextBefore: "",
+    contextAfter: "",
+    instruction: "Make this more concise",
+    baseVersionId: document.currentVersionId,
+  });
+
+  const cancelActiveResult = await requestJson(`/ai/jobs/${activeStream.jobId}/cancel`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  assert.equal(cancelActiveResult.status, 200);
+  assert.equal(cancelActiveResult.json.cancelled, true);
+
+  const completedStream = await requestJson("/ai/rewrite/stream", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: {
+      documentId: document.documentId,
+      selection: { start: 0, end: 22 },
+      selectedText: "Original selected text",
+      contextBefore: "",
+      contextAfter: "",
+      instruction: "Make this more concise",
+      baseVersionId: document.currentVersionId,
+    },
+  });
+
+  const completedJobId = JSON.parse(
+    completedStream.text.split("event: done\ndata: ")[1].split("\n\n")[0]
+  ).jobId;
+
+  const cancelCompletedResult = await requestJson(`/ai/jobs/${completedJobId}/cancel`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  assert.equal(cancelCompletedResult.status, 200);
+  assert.equal(cancelCompletedResult.json.cancelled, false);
+});
+
+test("POST /ai/jobs/:jobId/feedback updates streamed AI history status", async () => {
+  const token = await loginAs("user_1");
+  const document = await createDocument(token, { content: "Original selected text" });
+
+  const streamResult = await requestJson("/ai/rewrite/stream", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: {
+      documentId: document.documentId,
+      selection: { start: 0, end: 22 },
+      selectedText: "Original selected text",
+      contextBefore: "",
+      contextAfter: "",
+      instruction: "Make this more concise",
+      baseVersionId: document.currentVersionId,
+    },
+  });
+  const donePayload = JSON.parse(streamResult.text.split("event: done\ndata: ")[1].split("\n\n")[0]);
+
+  const feedbackResult = await requestJson(`/ai/jobs/${donePayload.jobId}/feedback`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: {
+      disposition: "applied_full",
+      appliedText: "Edited output",
+      appliedRange: { start: 0, end: 13 },
+    },
+  });
+  assert.equal(feedbackResult.status, 200);
+
+  const historyResult = await requestJson(`/documents/${document.documentId}/ai-history`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(historyResult.status, 200);
+  assert.equal(historyResult.json[0].status, "edited");
 });

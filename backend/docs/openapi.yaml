@@ -238,6 +238,33 @@ components:
         updatedAt:
           type: string
           format: date-time
+    AiUsageResponse:
+      type: object
+      required: [documentId, aiEnabled, dailyQuota, usedToday, remainingToday, allowedRolesForAI, currentUserRole, canUseAi, updatedAt]
+      properties:
+        documentId:
+          type: string
+        aiEnabled:
+          type: boolean
+        dailyQuota:
+          type: integer
+        usedToday:
+          type: integer
+        remainingToday:
+          type: integer
+        allowedRolesForAI:
+          type: array
+          items:
+            type: string
+            enum: [owner, editor, viewer]
+        currentUserRole:
+          type: string
+          enum: [owner, editor, viewer]
+        canUseAi:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
     UpdateAiPolicyRequest:
       type: object
       required: [aiEnabled, allowedRolesForAI, dailyQuota]
@@ -317,6 +344,62 @@ components:
           type: string
         requestId:
           type: string
+    RewriteAiStreamRequest:
+      type: object
+      required: [documentId, selection, selectedText, baseVersionId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: '#/components/schemas/TextSelection'
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        instruction:
+          type: string
+        baseVersionId:
+          type: string
+    SummarizeAiStreamRequest:
+      type: object
+      required: [documentId, selection, selectedText, baseVersionId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: '#/components/schemas/TextSelection'
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        instruction:
+          type: string
+        baseVersionId:
+          type: string
+    TranslateAiStreamRequest:
+      type: object
+      required: [documentId, selection, selectedText, targetLanguage, baseVersionId]
+      properties:
+        documentId:
+          type: string
+        selection:
+          $ref: '#/components/schemas/TextSelection'
+        selectedText:
+          type: string
+        contextBefore:
+          type: string
+        contextAfter:
+          type: string
+        instruction:
+          type: string
+        targetLanguage:
+          type: string
+        baseVersionId:
+          type: string
     AiJobResponse:
       type: object
       required: [jobId, statusUrl, status]
@@ -342,6 +425,60 @@ components:
         updatedAt:
           type: string
           format: date-time
+    AiHistoryItemResponse:
+      type: object
+      required: [id, documentId, action, promptLabel, outputPreview, status, createdAt, jobId]
+      properties:
+        id:
+          type: string
+        documentId:
+          type: string
+        action:
+          type: string
+          enum: [rewrite, summarize, translate]
+        promptLabel:
+          type: string
+        outputPreview:
+          type: string
+        status:
+          type: string
+          enum: [streaming, completed, accepted, edited, rejected, cancelled, failed]
+        createdAt:
+          type: string
+          format: date-time
+        jobId:
+          type: string
+    AiJobFeedbackRequest:
+      type: object
+      required: [disposition]
+      properties:
+        disposition:
+          type: string
+          enum: [applied_full, applied_partial, rejected]
+        appliedText:
+          type: string
+        appliedRange:
+          $ref: '#/components/schemas/TextSelection'
+    AiJobFeedbackResponse:
+      type: object
+      required: [jobId, disposition, recordedAt]
+      properties:
+        jobId:
+          type: string
+        disposition:
+          type: string
+          enum: [applied_full, applied_partial, rejected]
+        recordedAt:
+          type: string
+          format: date-time
+    CancelAiJobResponse:
+      type: object
+      required: [jobId, cancelled]
+      properties:
+        jobId:
+          type: string
+        cancelled:
+          type: boolean
     SessionRequest:
       type: object
       required: [documentId]
@@ -651,6 +788,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiPolicyResponse'
+  /documents/{documentId}/ai-history:
+    get:
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Persisted AI history for the document
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiHistoryItemResponse'
+  /documents/{documentId}/ai-usage:
+    get:
+      parameters:
+        - in: path
+          name: documentId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current AI usage and quota state for the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiUsageResponse'
   /sessions:
     post:
       requestBody:
@@ -681,6 +850,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiJobResponse'
+  /ai/rewrite/stream:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewriteAiStreamRequest'
+      responses:
+        '200':
+          description: Server-sent events stream for rewrite output
+          content:
+            text/event-stream:
+              schema:
+                type: string
   /ai/summarize:
     post:
       requestBody:
@@ -696,6 +880,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiJobResponse'
+  /ai/summarize/stream:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummarizeAiStreamRequest'
+      responses:
+        '200':
+          description: Server-sent events stream for summarize output
+          content:
+            text/event-stream:
+              schema:
+                type: string
   /ai/translate:
     post:
       requestBody:
@@ -711,6 +910,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiJobResponse'
+  /ai/translate/stream:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateAiStreamRequest'
+      responses:
+        '200':
+          description: Server-sent events stream for translate output
+          content:
+            text/event-stream:
+              schema:
+                type: string
   /ai/jobs/{jobId}:
     get:
       parameters:
@@ -726,6 +940,42 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AiJobResponse'
+  /ai/jobs/{jobId}/cancel:
+    post:
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cancelled state for a streamed AI job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelAiJobResponse'
+  /ai/jobs/{jobId}/feedback:
+    post:
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiJobFeedbackRequest'
+      responses:
+        '200':
+          description: Recorded AI feedback disposition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiJobFeedbackResponse'
   /documents/{documentId}/export:
     post:
       parameters:
