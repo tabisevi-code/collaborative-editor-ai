@@ -1,0 +1,22 @@
+\begin{table}[H]
+\centering
+\caption{Document-scoped role matrix in the delivered MVP}
+\label{tab:role-matrix}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X c c c}
+\toprule
+\textbf{Action} & \textbf{Viewer} & \textbf{Editor} & \textbf{Owner} \\
+\midrule
+View/open document & Yes & Yes & Yes \\
+Receive realtime updates/presence & Yes & Yes & Yes \\
+Send collaborative edit operations & No & Yes & Yes \\
+Persist content via REST save/autosave & No & Yes & Yes \\
+View version history & Yes & Yes & Yes \\
+Revert to previous version & No & No & Yes \\
+Export document & Yes & Yes & Yes \\
+Grant/update collaborator roles & No & No & Yes \\
+Revoke access & No & No & Yes \\
+Invoke AI rewrite/summarize/translate & No & Yes & Yes \\
+Configure AI policy and quota & No & No & Yes \\
+\bottomrule
+\end{tabularx}
+\end{table}

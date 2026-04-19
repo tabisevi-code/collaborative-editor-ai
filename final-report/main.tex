@@ -1,0 +1,85 @@
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{pdflscape}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\graphicspath{{figures/rendered/}{../docs/diagrams/}}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={AI1220 Assignment 1 - Collaborative Editor with AI Writing Assistant},
+  pdfauthor={Tabina, Noel, Nurtore, Ming Ming}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Collaborative Editor with AI Writing Assistant}
+\fancyhead[R]{AI1220 Assignment 1}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.75em}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  keywordstyle=\color{blue!60!black}\bfseries,
+  commentstyle=\color{gray!70!black}
+}
+
+\newcommand{\implementationnote}[1]{
+  \begin{quote}
+  \textbf{Delivered MVP implementation note.} #1
+  \end{quote}
+}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+\input{sections/00-title}
+\clearpage
+\hypersetup{pageanchor=true}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+
+\input{sections/01-executive-summary}
+\input{sections/02-team-responsibilities}
+\input{sections/03-requirements-engineering}
+\input{sections/04-system-architecture}
+\input{sections/05-project-management}
+\input{sections/06-proof-of-concept}
+\input{sections/07-delivered-mvp-alignment}
+\input{sections/08-conclusion}
+\appendix
+\input{sections/09-appendix}
+
+\end{document}

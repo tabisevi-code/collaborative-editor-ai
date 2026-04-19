@@ -1,0 +1,33 @@
+\begin{longtable}{p{4.1cm}p{5.0cm}p{5.2cm}}
+\caption{Assignment coverage map}\label{tab:coverage-map}\\
+\toprule
+\textbf{Assignment Requirement} & \textbf{Covered in Report} & \textbf{Covered in Repository / MVP} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Assignment Requirement} & \textbf{Covered in Report} & \textbf{Covered in Repository / MVP} \\
+\midrule
+\endhead
+Stakeholder analysis & Section 3, Stakeholder Analysis & Reflected in RBAC, AI policy, and deployment decisions \\
+Functional requirements across collaboration, AI, document management, and user management & Section 3, Functional Requirements & Backend routes, frontend flows, realtime service, tests \\
+Measurable non-functional requirements & Section 3, Non-Functional Requirements & Latency/error/reliability constraints reflected in design, scripts, and fallback behavior \\
+At least ten user stories & Section 3, User Stories and Scenarios & Implemented or explicitly scoped in MVP alignment section \\
+Requirements traceability matrix & Section 3, Traceability Matrix & Links stories to repo modules and services \\
+Architectural drivers & Section 4, Architectural Drivers & Reflected in modular repo and service boundaries \\
+C4 Level 1, 2, and 3 diagrams & Section 4, Figures and appendix source listings & Mermaid source in repo and final-report package \\
+Feature decomposition & Section 4, Feature Decomposition & Monorepo service layout and domain modules \\
+AI integration design & Section 4, AI Integration Design & AI service abstraction, async jobs, provider selection \\
+API design with concrete contracts & Section 4, API Design & Backend OpenAPI, contract notes, automated tests \\
+Authentication and authorization rationale & Section 4, Authentication and Authorization & Login route, bearer tokens, RBAC, realtime write restrictions \\
+Communication model & Section 4, Communication Model & Backend sessions + Yjs realtime service + frontend reconnect behavior \\
+Code structure and repository organization & Section 4, Code Structure \& Repository Organization & Root scripts, monorepo folders, shared code, tests \\
+Data model and ER diagram & Section 4, Data Model & SQLite schema, repositories, versioning, AI jobs, export jobs \\
+Four ADRs & Section 4, Architecture Decision Records & Reflected in code and tooling choices \\
+Team structure and ownership & Section 5, Team Structure and Ownership & PR/branch history and service ownership in repo \\
+Development workflow and methodology & Section 5, Development Workflow and Methodology & Branch structure, CI, root scripts, reviewable commit history \\
+Risk assessment and milestones & Section 5, Risk Assessment and Timeline & Regression tests, demo reset, Docker Compose, CI, milestone table \\
+PoC front-end/back-end communication & Section 6, Proof of Concept & Working MVP and automated smoke tests \\
+README and runnable repository & Section 6, Repository and README Evidence & Root README, service READMEs, DEMO.md, Docker Compose \\
+Editable diagram sources & Appendix Mermaid source listings & `docs/diagrams/*.mmd`, `final-report/figures/mermaid-src/*.mmd` \\
+\bottomrule
+\end{longtable}

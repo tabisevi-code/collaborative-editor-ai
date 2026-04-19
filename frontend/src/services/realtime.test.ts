@@ -11,6 +11,15 @@ const MESSAGE_AWARENESS = 1;
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    setSession: vi.fn(),
+    login: vi.fn(),
+    register: vi.fn(),
+    forgotPassword: vi.fn(),
+    resetPassword: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+    getCurrentUser: vi.fn(),
+    listDocuments: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -18,13 +27,18 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     listPermissions: vi.fn(),
     updatePermission: vi.fn(),
     revokePermission: vi.fn(),
+    listShareLinks: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
+    previewShareLink: vi.fn(),
+    acceptShareLink: vi.fn(),
     getAiPolicy: vi.fn(),
+    getAiUsage: vi.fn(),
     updateAiPolicy: vi.fn(),
     revertToVersion: vi.fn(),
-    requestRewriteJob: vi.fn(),
-    requestSummarizeJob: vi.fn(),
-    requestTranslateJob: vi.fn(),
-    getAiJobStatus: vi.fn(),
+    startAiStream: vi.fn(),
+    listAiHistory: vi.fn(),
+    cancelAiJob: vi.fn(),
     recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
     getExportJobStatus: vi.fn(),
@@ -67,14 +81,16 @@ class MockWebSocket {
   readyState = MockWebSocket.OPEN;
   binaryType = "blob";
   url: string;
+  protocols: string[];
   sent: Array<string | Uint8Array> = [];
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string | ArrayBuffer }) => void) | null = null;
   onerror: (() => void) | null = null;
   onclose: (() => void) | null = null;
 
-  constructor(url: string) {
+  constructor(url: string, protocols?: string | string[]) {
     this.url = url;
+    this.protocols = Array.isArray(protocols) ? protocols : protocols ? [protocols] : [];
     MockWebSocket.instances.push(this);
   }
 
@@ -105,7 +121,8 @@ describe("realtime service", () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
         sessionId: "sess_123",
-        wsUrl: "ws://localhost:3001/ws?token=abc",
+        wsUrl: "ws://localhost:3001/ws",
+        sessionToken: "abc",
         role: "editor",
       })),
     });
@@ -121,6 +138,7 @@ describe("realtime service", () => {
 
     expect(apiClient.createSession).toHaveBeenCalledWith("doc_123", "user_1");
     const socket = MockWebSocket.instances[0];
+    expect(socket.protocols).toEqual(["collab.realtime.v1", "auth.abc"]);
     socket.onopen?.();
 
     expect(socket.sent.some((payload) => payload instanceof Uint8Array)).toBe(true);
@@ -131,7 +149,8 @@ describe("realtime service", () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
         sessionId: "sess_123",
-        wsUrl: "ws://localhost:3001/ws?token=abc",
+        wsUrl: "ws://localhost:3001/ws",
+        sessionToken: "abc",
         role: "editor",
       })),
     });
@@ -160,7 +179,8 @@ describe("realtime service", () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
         sessionId: "sess_123",
-        wsUrl: "ws://localhost:3001/ws?token=abc",
+        wsUrl: "ws://localhost:3001/ws",
+        sessionToken: "abc",
         role: "editor",
       })),
     });
@@ -193,7 +213,8 @@ describe("realtime service", () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
         sessionId: "sess_123",
-        wsUrl: "ws://localhost:3001/ws?token=abc",
+        wsUrl: "ws://localhost:3001/ws",
+        sessionToken: "abc",
         role: "editor",
       })),
     });
@@ -223,7 +244,8 @@ describe("realtime service", () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
         sessionId: "sess_123",
-        wsUrl: "ws://localhost:3001/ws?token=abc",
+        wsUrl: "ws://localhost:3001/ws",
+        sessionToken: "abc",
         role: "editor",
       })),
     });
@@ -257,7 +279,8 @@ describe("realtime service", () => {
     const apiClient = createApiClientMock({
       createSession: vi.fn(async () => ({
         sessionId: "sess_123",
-        wsUrl: "ws://localhost:3001/ws?token=abc",
+        wsUrl: "ws://localhost:3001/ws",
+        sessionToken: "abc",
         role: "editor",
       })),
     });

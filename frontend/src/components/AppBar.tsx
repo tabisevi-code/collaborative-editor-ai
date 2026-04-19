@@ -1,10 +1,13 @@
 /** Google Docs-style home top bar */
 interface AppBarProps {
   userId: string;
-  onUserIdChange(nextValue: string): void;
+  displayName: string;
+  searchQuery: string;
+  onSearchQueryChange(value: string): void;
+  onSignOut(): void | Promise<void>;
 }
 
-export function AppBar({ userId, onUserIdChange }: AppBarProps) {
+export function AppBar({ userId, displayName, searchQuery, onSearchQueryChange, onSignOut }: AppBarProps) {
   const initial = userId.charAt(0).toUpperCase() || "U";
 
   return (
@@ -30,21 +33,27 @@ export function AppBar({ userId, onUserIdChange }: AppBarProps) {
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </span>
-        <input className="home-search-input" placeholder="Search" aria-label="Search documents" />
+        <input
+          className="home-search-input"
+          placeholder="Search"
+          aria-label="Search documents"
+          value={searchQuery}
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+        />
       </div>
 
       {/* Right: user switcher + avatar */}
       <div className="home-topbar-right">
-        <label className="user-switch-chip" title="Active user ID — change to switch roles">
+        <div className="user-switch-chip" title={`Signed in as ${userId}`}>
           <div className="home-user-avatar" style={{ width: 24, height: 24, fontSize: 11 }}>{initial}</div>
-          <input
-            value={userId}
-            onChange={(e) => onUserIdChange(e.target.value)}
-            placeholder="user_1"
-            aria-label="User ID"
-            spellCheck={false}
-          />
-        </label>
+          <div className="user-switch-summary">
+            <strong>{displayName || userId}</strong>
+            <span>{userId}</span>
+          </div>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={onSignOut}>
+          Sign out
+        </button>
         <button className="gd-icon-btn" title="Google apps">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <circle cx="6"  cy="6"  r="2"/><circle cx="12" cy="6"  r="2"/><circle cx="18" cy="6"  r="2"/>

@@ -1,6 +1,11 @@
 import { Link } from "react-router-dom";
 import type { GetDocumentResponse } from "../types/api";
 import type { ToolbarAction } from "../lib/richTextToolbar";
+import {
+  FileMenu, EditMenu, ViewMenu, InsertMenu,
+  FormatMenu, ToolsMenu, ExtensionsMenu, HelpMenu,
+} from "./DocMenus";
+import { UserMenu } from "./UserMenu";
 
 type SaveState = "saved" | "unsaved" | "saving" | "error";
 
@@ -11,7 +16,8 @@ interface DocHeaderProps {
   onTitleChange(title: string): void;
   saveState: SaveState;
   userId: string;
-  onUserIdChange(nextValue: string): void;
+  displayName: string;
+  onSignOut(): void;
   realtimeStatus?: string;
   onSave(): void;
   onAiOpen(): void;
@@ -50,7 +56,8 @@ export function DocHeader({
   onTitleChange,
   saveState,
   userId,
-  onUserIdChange,
+  displayName,
+  onSignOut,
   realtimeStatus,
   onSave,
   onAiOpen,
@@ -105,64 +112,49 @@ export function DocHeader({
         </div>
 
         <div className="gdoc-topbar-right">
-          {onPermissionsOpen && role === "owner" && (
-            <button className="btn btn-sm btn-secondary" onClick={onPermissionsOpen} title="Manage sharing">
-              Share
-            </button>
-          )}
-          {onAiPolicyOpen && role === "owner" && (
-            <button className="btn btn-sm btn-secondary" onClick={onAiPolicyOpen} title="Manage AI policy">
-              AI Policy
-            </button>
-          )}
-          {onExportOpen && (
-            <button className="btn btn-sm btn-secondary" onClick={onExportOpen} title="Export document">
-              Export
-            </button>
-          )}
-          {!isReadOnly && (
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={onSave}
-              disabled={!canSave}
-              title="Save"
-            >
-              Save
-            </button>
-          )}
           <button
             className="btn btn-sm btn-ai"
+            data-testid="open-ai-panel"
             onClick={onAiOpen}
             disabled={isReadOnly}
             title={isReadOnly ? "AI unavailable in view-only mode" : "AI Assistant"}
           >
             ✨ AI
           </button>
-          <button className="gd-icon-btn" onClick={onHistoryOpen} title="Version history">
+          {onAiPolicyOpen && role === "owner" && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onAiPolicyOpen}
+              title="AI Policy"
+              aria-label="AI Policy"
+            >
+              AI Policy
+            </button>
+          )}
+          <button className="gd-icon-btn" data-testid="open-version-history" onClick={onHistoryOpen} title="Version history" aria-label="Version history">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
           </button>
-          <label className="user-switch-chip gdoc-user-switch" title="Active user ID for this tab">
-            <div className="gdoc-user-avatar">{initial}</div>
-            <input
-              value={userId}
-              onChange={(event) => onUserIdChange(event.target.value)}
-              placeholder="user_1"
-              aria-label="Active user ID"
-              spellCheck={false}
-            />
-          </label>
+          <UserMenu initial={initial} displayName={displayName} userId={userId} onSignOut={onSignOut} />
         </div>
       </header>
 
       {/* ── Menu bar ────────────────────────────────────────────────── */}
       <nav className="gdoc-menubar" aria-label="Document menu">
-        {["File", "Edit", "View", "Insert", "Format", "Tools", "Extensions", "Help"].map((item) => (
-          <button key={item} className="gdoc-menu-item" title={`${item} (not yet implemented)`}>
-            {item}
-          </button>
-        ))}
+        <FileMenu
+          onSave={onSave}
+          canSave={canSave}
+          onShare={onPermissionsOpen && role === "owner" ? onPermissionsOpen : undefined}
+          onExport={onExportOpen}
+        />
+        <EditMenu onToolbarAction={onToolbarAction} readOnly={isReadOnly} />
+        <ViewMenu />
+        <InsertMenu />
+        <FormatMenu onToolbarAction={onToolbarAction} readOnly={isReadOnly} />
+        <ToolsMenu onAiPolicyOpen={onAiPolicyOpen && role === "owner" ? onAiPolicyOpen : undefined} />
+        <ExtensionsMenu />
+        <HelpMenu />
       </nav>
 
       {/* ── Format toolbar ──────────────────────────────────────────── */}
@@ -196,9 +188,22 @@ export function DocHeader({
 
         <div className="gdoc-toolbar-sep" />
 
-        <select className="gdoc-tb-select" defaultValue="normal" title="Paragraph style" style={{ width: 120 }}>
-          {["Normal text", "Title", "Subtitle", "Heading 1", "Heading 2", "Heading 3"].map((s) => (
-            <option key={s} value={s}>{s}</option>
+        <select
+          className="gdoc-tb-select"
+          defaultValue="paragraph"
+          title="Paragraph style"
+          style={{ width: 120 }}
+          disabled={!canFormat}
+          onChange={(event) => onToolbarAction?.(event.target.value as ToolbarAction)}
+        >
+          {[
+            ["paragraph", "Normal text"],
+            ["heading1", "Heading 1"],
+            ["heading2", "Heading 2"],
+            ["heading3", "Heading 3"],
+            ["codeBlock", "Code block"],
+          ].map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
           ))}
         </select>
 

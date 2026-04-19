@@ -69,13 +69,13 @@ async function main() {
   }
 
   function handleLine(line) {
-    if (/^ok\s+\d+\s+-/.test(line)) {
+    if (/^ok\s+\d+\s+-/.test(line) || /^[✔✓]\s+/.test(line)) {
       completedTests += 1;
       scheduleSuccessfulShutdown();
       return;
     }
 
-    if (/^not ok\s+\d+\s+-/.test(line)) {
+    if (/^not ok\s+\d+\s+-/.test(line) || /^[✖✗]\s+/.test(line)) {
       completedTests += 1;
       sawFailure = true;
     }

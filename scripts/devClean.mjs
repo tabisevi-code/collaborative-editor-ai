@@ -2,37 +2,25 @@ import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { createRequire } from "node:module";
 
-import { ROOT_DIR } from "./utils.mjs";
+import { FASTAPI_DATABASE_PATH, FASTAPI_DATABASE_URL, ROOT_DIR } from "./utils.mjs";
 
-const require = createRequire(import.meta.url);
-const { loadEnvFile } = require("../backend/src/lib/loadEnvFile");
-
-const BACKEND_DIR = path.join(ROOT_DIR, "backend");
 const DEV_SCRIPT = path.join(ROOT_DIR, "scripts", "devAll.mjs");
-const APP_PORTS = [3000, 3001, 5173];
+const APP_PORTS = [8000, 3001, 5173];
 
 function resolveDatabasePath() {
-  const env = { ...process.env };
-  loadEnvFile(path.join(BACKEND_DIR, ".env"), env);
-
-  const configuredPath = env.DATABASE_PATH?.trim();
-  if (!configuredPath) {
-    return path.join(BACKEND_DIR, "data", "collaborative-editor-ai.sqlite");
+  const configuredUrl = process.env.FASTAPI_DATABASE_URL?.trim() || FASTAPI_DATABASE_URL;
+  if (!configuredUrl.startsWith("sqlite:///")) {
+    return FASTAPI_DATABASE_PATH;
   }
 
-  if (path.isAbsolute(configuredPath)) {
-    return configuredPath;
-  }
-
-  return path.resolve(BACKEND_DIR, configuredPath);
+  return configuredUrl.slice("sqlite:///".length);
 }
 
 function removeFileIfPresent(filePath) {
   if (fs.existsSync(filePath)) {
     fs.rmSync(filePath, { force: true });
-    process.stdout.write(`[demo] removed ${filePath}\n`);
+    process.stdout.write(`[dev-clean] removed ${filePath}\n`);
   }
 }
 
@@ -53,7 +41,7 @@ function killExistingAppProcesses() {
 
         seenPids.add(pid);
         process.kill(Number(pid), "SIGTERM");
-        process.stdout.write(`[demo] stopped existing process ${pid} on port ${port}\n`);
+        process.stdout.write(`[dev-clean] stopped existing process ${pid} on port ${port}\n`);
       }
     } catch {
       // no process on that port
@@ -62,21 +50,21 @@ function killExistingAppProcesses() {
 }
 
 async function resolveAiProvider() {
-  if (process.env.AI_PROVIDER?.trim()) {
-    return process.env.AI_PROVIDER.trim();
+  if (process.env.AI_STREAM_PROVIDER?.trim()) {
+    return process.env.AI_STREAM_PROVIDER.trim();
   }
 
   try {
     const response = await fetch("http://127.0.0.1:1234/v1/models");
     if (response.ok) {
-      process.stdout.write("[demo] detected LM Studio. Using AI_PROVIDER=lmstudio\n");
+      process.stdout.write("[dev-clean] detected LM Studio. Using AI_STREAM_PROVIDER=lmstudio\n");
       return "lmstudio";
     }
   } catch {
     // fall back to stub below
   }
 
-  process.stdout.write("[demo] LM Studio not detected. Using AI_PROVIDER=stub\n");
+  process.stdout.write("[dev-clean] LM Studio not detected. Using AI_STREAM_PROVIDER=stub\n");
   return "stub";
 }
 
@@ -93,7 +81,8 @@ async function main() {
     stdio: "inherit",
     env: {
       ...process.env,
-      AI_PROVIDER: aiProvider,
+      FASTAPI_DATABASE_URL: process.env.FASTAPI_DATABASE_URL || FASTAPI_DATABASE_URL,
+      AI_STREAM_PROVIDER: aiProvider,
     },
   });
 

@@ -7,26 +7,31 @@ import { AiPolicyPanel } from "../components/AiPolicyPanel";
 import { DocHeader } from "../components/DocHeader";
 import { ExportPanel } from "../components/ExportPanel";
 import { MetadataCard } from "../components/MetadataCard";
+import { RichEditor, type RichEditorHandle } from "../components/RichEditor";
 import { PermissionsPanel } from "../components/PermissionsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { VersionHistoryPanel } from "../components/VersionHistoryPanel";
-import { applyToolbarAction, type ToolbarAction, type ToolbarSelection } from "../lib/richTextToolbar";
+import type { ToolbarAction } from "../lib/richTextToolbar";
 import {
   isViewerRole,
   mapDocumentError,
   mapSaveError,
   type SaveState,
+  toPlainText,
   toRealtimeStatusLabel,
   wordCount,
 } from "./documentPageUtils";
 import type { ApiClient } from "../services/api";
 import { createAiService, type AiSelectionSnapshot } from "../services/ai";
+import type { DashboardService } from "../services/dashboard";
 import { ApiError, type GetDocumentResponse, type TextSelection } from "../types/api";
 
 interface DocumentPageProps {
   apiClient: ApiClient;
+  dashboardService: DashboardService;
   userId: string;
-  onUserIdChange(nextValue: string): void;
+  displayName: string;
+  onSignOut(): void;
 }
 
 const AUTO_SAVE_DELAY_MS = 1200;
@@ -36,7 +41,7 @@ const AUTO_SAVE_DELAY_MS = 1200;
  * The REST document snapshot is still critical for permissions, save/version
  * metadata, and recovery paths such as conflicts or revert.
  */
-export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPageProps) {
+export function DocumentPage({ apiClient, dashboardService, userId, displayName, onSignOut }: DocumentPageProps) {
   const { documentId = "" } = useParams();
   const navigate = useNavigate();
   const [document, setDocument] = useState<GetDocumentResponse | null>(null);
@@ -49,6 +54,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   const [loadErrorCode, setLoadErrorCode] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
+  const [syncNoticeMessage, setSyncNoticeMessage] = useState<string | null>(null);
   const [hasStaleRevisionConflict, setHasStaleRevisionConflict] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [showVersionPanel, setShowVersionPanel] = useState(false);
@@ -57,19 +63,17 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<RichEditorHandle>(null);
   const requestIdRef = useRef(0);
-  const historyRef = useRef<string[]>([""]);
-  const historyIndexRef = useRef(0);
-  const aiService = createAiService(apiClient, userId);
+  const aiService = createAiService(apiClient);
   const realtimeDocument = useRealtimeDocument({
     apiClient,
     document,
     userId,
     onDocumentReverted: () => {
-      setSaveErrorMessage("This document changed remotely. The latest saved version has been reloaded.");
+      setSyncNoticeMessage("A remote revert was applied. Version metadata has been refreshed.");
       setHasStaleRevisionConflict(false);
-      void loadDocument({ reloadCollaboration: true });
+      void loadDocument();
     },
     onAccessRevoked: () => {
       setSaveErrorMessage("Your access was revoked while this document was open. Editing is now disabled.");
@@ -87,32 +91,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   const collaboratorCount = realtimeDocument.remotePeers.length;
   const realtimeStatus = toRealtimeStatusLabel(realtimeDocument.realtimeState, collaboratorCount);
 
-  function resetEditorHistory(nextValue: string) {
-    historyRef.current = [nextValue];
-    historyIndexRef.current = 0;
-  }
-
-  function pushEditorHistory(nextValue: string) {
-    const currentValue = historyRef.current[historyIndexRef.current];
-    if (currentValue === nextValue) {
-      return;
-    }
-
-    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-    nextHistory.push(nextValue);
-    if (nextHistory.length > 100) {
-      nextHistory.shift();
-    }
-
-    historyRef.current = nextHistory;
-    historyIndexRef.current = nextHistory.length - 1;
-  }
-
-  function applyVisibleContent(nextValue: string, reason: string, options?: { recordHistory?: boolean }) {
-    if (options?.recordHistory) {
-      pushEditorHistory(nextValue);
-    }
-
+  function applyVisibleContent(nextValue: string, reason: string) {
     console.debug("[document-page] content_updated", {
       reason,
       collaborationReady: realtimeDocument.collaborationReady,
@@ -130,18 +109,19 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
     setFallbackContent(nextValue);
   }
 
-  function syncSelection(nextSelection: ToolbarSelection, content: string) {
+  function syncSelection(nextSelection: TextSelection, content: string) {
     setSelection(nextSelection);
-    setSelectedText(nextSelection.start === nextSelection.end ? "" : content.slice(nextSelection.start, nextSelection.end));
+    const plainText = toPlainText(content);
+    setSelectedText(nextSelection.start === nextSelection.end ? "" : plainText.slice(nextSelection.start, nextSelection.end));
 
     window.requestAnimationFrame(() => {
-      const textarea = textareaRef.current;
-      if (!textarea) {
+      const editor = editorRef.current;
+      if (!editor) {
         return;
       }
 
-      textarea.focus();
-      textarea.setSelectionRange(nextSelection.start, nextSelection.end);
+      editor.focus();
+      editor.setSelection(nextSelection);
     });
   }
 
@@ -164,13 +144,16 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
       setDocument(fetched);
       setDraftTitle(fetched.title);
       setFallbackContent(fetched.content);
-      resetEditorHistory(fetched.content);
+      await dashboardService.rememberDocument(userId, fetched);
 
       if (reloadCollaboration) {
         realtimeDocument.applyRemoteReset(fetched.content);
       }
     } catch (error) {
       const apiError = error instanceof ApiError ? error : new ApiError(0, "UNKNOWN_ERROR", "unknown error");
+      if (apiError.status === 401) {
+        onSignOut();
+      }
       setLoadErrorCode(apiError.code);
       setErrorMessage(
         apiError.status === 404 ? "This document no longer exists. Returning to the home page..." : mapDocumentError(apiError)
@@ -213,14 +196,9 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   }, [realtimeDocument.collaborationReady, realtimeDocument.collaborationText, fallbackContent, document, saveState]);
 
   useEffect(() => {
-    const activeText = realtimeDocument.collaborationReady ? realtimeDocument.collaborationText : fallbackContent;
+    const activeText = toPlainText(realtimeDocument.collaborationReady ? realtimeDocument.collaborationText : fallbackContent);
     const { start, end } = selection;
-    if (end > start) {
-      setSelectedText(activeText.slice(start, end));
-      return;
-    }
-
-    setSelectedText("");
+    setSelectedText(end > start ? activeText.slice(start, end) : "");
   }, [realtimeDocument.collaborationReady, realtimeDocument.collaborationText, fallbackContent, selection]);
 
   useEffect(() => {
@@ -245,7 +223,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   async function recordAiFeedback(
     jobId: string | null,
     disposition: "applied_full" | "applied_partial" | "rejected",
-    feedback?: { appliedText?: string; appliedRange?: TextSelection }
+    feedback?: { appliedText?: string; appliedRange?: TextSelection; documentId?: string; edited?: boolean }
   ) {
     if (!jobId) {
       return;
@@ -281,27 +259,56 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
     const liveText = options.content ?? (realtimeDocument.getText() || visibleContent);
     setSaveState("saving");
     setSaveErrorMessage(null);
+    setSyncNoticeMessage(null);
     setHasStaleRevisionConflict(false);
 
-    try {
+    async function saveWithRevision(baseRevisionId: string) {
       await apiClient.updateDocument(
         documentId,
         {
           content: liveText,
           requestId: nextRequestId("save"),
-          baseRevisionId: document.revisionId,
+          baseRevisionId,
           preUpdateVersionReason: options.preUpdateVersionReason,
           updateReason: options.updateReason,
           aiJobId: options.aiJobId ?? undefined,
         },
         userId
       );
+    }
+
+    try {
+      await saveWithRevision(document.revisionId);
 
       await loadDocument();
       setSaveState("saved");
       return true;
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409 && realtimeDocument.collaborationReady) {
+        try {
+          const latestDocument = await apiClient.getDocument(documentId, userId);
+
+          if (latestDocument.content === liveText) {
+            setDocument(latestDocument);
+            setDraftTitle(latestDocument.title);
+            setFallbackContent(latestDocument.content);
+            setSaveState("saved");
+            return true;
+          }
+
+          await saveWithRevision(latestDocument.revisionId);
+          await loadDocument();
+          setSaveState("saved");
+          return true;
+        } catch (retryError) {
+          error = retryError;
+        }
+      }
+
       const mapped = mapSaveError(error);
+      if (error instanceof ApiError && error.status === 401) {
+        onSignOut();
+      }
       setSaveState("error");
       setSaveErrorMessage(mapped.message);
       setHasStaleRevisionConflict(mapped.stale);
@@ -310,21 +317,21 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
   }
 
   function captureSelection() {
-    const ta = textareaRef.current;
-    if (!ta) {
+    const editor = editorRef.current;
+    if (!editor) {
       return;
     }
 
-    const nextSelection = {
-      start: ta.selectionStart,
-      end: ta.selectionEnd,
-    };
+    const nextSelectedText = editor.captureSelection();
+    const nextSelection = editor.getSelection();
     setSelection(nextSelection);
+    setSelectedText(nextSelectedText);
     realtimeDocument.setCursorSelection(nextSelection.start === nextSelection.end ? null : nextSelection);
   }
 
   function handleEditorChange(nextText: string) {
-    applyVisibleContent(nextText, "typing", { recordHistory: true });
+    setSyncNoticeMessage(null);
+    applyVisibleContent(nextText, "typing");
   }
 
   async function handleAiApply(payload: AiApplyPayload) {
@@ -332,21 +339,21 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
       return;
     }
 
-    const targetSelection = payload.targetSelection;
-    let nextContent = visibleContent;
-
-    if (realtimeDocument.collaborationReady) {
-      const didApply = realtimeDocument.replaceSelection(targetSelection, payload.text);
-      if (!didApply) {
-        return;
-      }
-
-      nextContent = realtimeDocument.getText();
-    } else {
-      nextContent =
-        visibleContent.slice(0, targetSelection.start) + payload.text + visibleContent.slice(targetSelection.end);
-      applyVisibleContent(nextContent, "ai-apply", { recordHistory: true });
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
     }
+
+    const targetSelection = payload.targetSelection;
+    const activePlainText = toPlainText(realtimeDocument.getText() || visibleContent);
+    const currentRangeText = activePlainText.slice(targetSelection.start, targetSelection.end);
+    if (currentRangeText !== payload.sourceText) {
+      throw new Error("The selected text changed before the AI result was applied. Re-run AI on the latest text.");
+    }
+
+    editor.replaceSelection(payload.text, targetSelection);
+    const nextContent = editor.getHTML();
+    applyVisibleContent(nextContent, "ai-apply");
 
     const nextCursor = targetSelection.start + payload.text.length;
     syncSelection({ start: nextCursor, end: nextCursor }, nextContent);
@@ -365,14 +372,17 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
           start: targetSelection.start,
           end: targetSelection.start + payload.text.length,
         },
+        documentId,
+        edited: payload.edited,
       });
     }
   }
 
   function handleRevert() {
     setSaveErrorMessage(null);
+    setSyncNoticeMessage(null);
     setHasStaleRevisionConflict(false);
-    void loadDocument({ reloadCollaboration: true });
+    void loadDocument();
   }
 
   function buildAiSelectionSnapshot(): AiSelectionSnapshot | null {
@@ -381,7 +391,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
     }
 
     const { start, end } = selection;
-    const activeText = realtimeDocument.getText() || visibleContent;
+    const activeText = toPlainText(realtimeDocument.getText() || visibleContent);
     if (end <= start) {
       return null;
     }
@@ -395,31 +405,44 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
     };
   }
 
+  function handleUseWholeDocument() {
+    const activeText = toPlainText(realtimeDocument.getText() || visibleContent);
+    if (!activeText.length) {
+      return;
+    }
+
+    const wholeSelection = { start: 0, end: activeText.length };
+    syncSelection(wholeSelection, visibleContent);
+    realtimeDocument.setCursorSelection(wholeSelection);
+  }
+
   function handleToolbarAction(action: ToolbarAction) {
     if (realtimeDocument.role === "viewer" || realtimeDocument.accessRevoked) {
       return;
     }
 
-    if (action === "undo" || action === "redo") {
-      const nextIndex = historyIndexRef.current + (action === "undo" ? -1 : 1);
-      const nextValue = historyRef.current[nextIndex];
-      if (nextValue === undefined) {
-        return;
-      }
-
-      historyIndexRef.current = nextIndex;
-      applyVisibleContent(nextValue, `toolbar:${action}`);
-      syncSelection({ start: nextValue.length, end: nextValue.length }, nextValue);
+    const editor = editorRef.current;
+    if (!editor) {
       return;
     }
 
-    const textarea = textareaRef.current;
-    const currentSelection = textarea
-      ? { start: textarea.selectionStart, end: textarea.selectionEnd }
-      : selection;
-    const result = applyToolbarAction(visibleContent, currentSelection, action);
-    applyVisibleContent(result.value, `toolbar:${action}`, { recordHistory: true });
-    syncSelection(result.selection, result.value);
+    const commandMap: Record<ToolbarAction, [string, string?]> = {
+      bold: ["bold"],
+      italic: ["italic"],
+      underline: ["underline"],
+      strike: ["strikeThrough"],
+      bulletList: ["insertUnorderedList"],
+      numberedList: ["insertOrderedList"],
+      paragraph: ["formatBlock", "<p>"],
+      heading1: ["formatBlock", "<h1>"],
+      heading2: ["formatBlock", "<h2>"],
+      heading3: ["formatBlock", "<h3>"],
+      codeBlock: ["formatBlock", "<pre>"],
+      undo: ["undo"],
+      redo: ["redo"],
+    };
+    const [command, value] = commandMap[action];
+    editor.format(command, value);
   }
 
   return (
@@ -431,7 +454,8 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
         onTitleChange={setDraftTitle}
         saveState={saveState}
         userId={userId}
-        onUserIdChange={onUserIdChange}
+        displayName={displayName}
+        onSignOut={onSignOut}
         realtimeStatus={realtimeStatus}
         onSave={handleSave}
         onAiOpen={() => {
@@ -466,7 +490,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
         )}
 
         {document && (
-          <div className="gdoc-page">
+          <div className="gdoc-document-stack">
             {(isReadOnly || !realtimeDocument.collaborationReady) && (
               <div style={{ marginBottom: "1rem" }}>
                 <StatusBanner
@@ -506,6 +530,12 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
               </div>
             )}
 
+            {syncNoticeMessage && (
+              <div style={{ marginBottom: "1rem" }}>
+                <StatusBanner tone="info" title="Document updated" message={syncNoticeMessage} />
+              </div>
+            )}
+
             {realtimeDocument.remotePeers.length > 0 && (
               <div className="gdoc-collaborator-overlay" aria-label="Live collaborators">
                 {realtimeDocument.remotePeers.map((peer) => (
@@ -518,22 +548,25 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
               </div>
             )}
 
-            <textarea
-              ref={textareaRef}
-              className="gdoc-editor"
+            <RichEditor
+              ref={editorRef}
               value={visibleContent}
-              onChange={(event) => handleEditorChange(event.target.value)}
-              onSelect={captureSelection}
-              onMouseUp={captureSelection}
-              onKeyUp={captureSelection}
+              remotePeers={realtimeDocument.remotePeers}
+              onChange={handleEditorChange}
+              onSelectionChange={(nextSelection, nextSelectedText) => {
+                setSelection(nextSelection);
+                setSelectedText(nextSelectedText);
+                realtimeDocument.setCursorSelection(
+                  nextSelection.start === nextSelection.end ? null : nextSelection
+                );
+              }}
               readOnly={isReadOnly}
-              aria-label="Document content"
-              spellCheck
               autoFocus={!isReadOnly}
+              className="gdoc-page rich-editor-page"
             />
 
             {showMeta && (
-              <div style={{ marginTop: "2rem", borderTop: "1px solid var(--gd-border)", paddingTop: "1.5rem" }}>
+              <div className="gdoc-meta-panel">
                 <MetadataCard document={{ ...document, role: realtimeDocument.role }} />
               </div>
             )}
@@ -550,7 +583,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
             <span>·</span>
             <span>{wordCount(visibleContent).toLocaleString()} words</span>
             <span>·</span>
-            <span>{visibleContent.length.toLocaleString()} characters</span>
+            <span>{toPlainText(visibleContent).length.toLocaleString()} characters</span>
             <span>·</span>
             <span>{collaboratorCount > 0 ? `${collaboratorCount + 1} people connected` : "Only you connected"}</span>
             {document.updatedAt && (
@@ -585,6 +618,7 @@ export function DocumentPage({ apiClient, userId, onUserIdChange }: DocumentPage
           }
           selectedText={selectedText}
           aiService={aiService}
+          onUseWholeDocument={handleUseWholeDocument}
           onApply={handleAiApply}
           onReject={(jobId) => recordAiFeedback(jobId, "rejected")}
           onClose={() => setShowAiPanel(false)}

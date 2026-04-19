@@ -1,0 +1,113 @@
+erDiagram
+    USERS ||--o{ DOCUMENTS : owns
+    USERS ||--o{ DOCUMENT_PERMISSIONS : receives
+    DOCUMENTS ||--o{ DOCUMENT_PERMISSIONS : grants
+    DOCUMENTS ||--o{ DOCUMENT_VERSIONS : snapshots
+    DOCUMENTS ||--|| AI_POLICIES : has
+    DOCUMENTS ||--o{ AI_JOBS : scopes
+    DOCUMENTS ||--o{ EXPORT_JOBS : scopes
+    DOCUMENTS ||--o{ REALTIME_EVENTS : emits
+    DOCUMENTS ||--o{ AUDIT_LOGS : records
+    USERS ||--o{ AI_JOBS : creates
+    USERS ||--o{ EXPORT_JOBS : creates
+    USERS ||--o{ AUDIT_LOGS : performs
+    DOCUMENTS ||--o{ IDEMPOTENCY_KEYS : guards
+    DOCUMENT_VERSIONS ||--o{ AI_JOBS : base_version
+
+    USERS {
+      text user_id PK
+      text display_name
+      text global_role
+      text access_token
+      text created_at
+      text updated_at
+    }
+
+    DOCUMENTS {
+      text document_id PK
+      text owner_user_id FK
+      text title
+      text content
+      text created_at
+      text updated_at
+      text current_version_id FK
+      text revision_id
+    }
+
+    DOCUMENT_PERMISSIONS {
+      text document_id FK
+      text user_id FK
+      text role
+      text updated_at
+    }
+
+    DOCUMENT_VERSIONS {
+      text version_id PK
+      text document_id FK
+      int version_number
+      text created_at
+      text created_by_user_id FK
+      text reason
+      text snapshot_content
+      text base_revision_id
+    }
+
+    AI_POLICIES {
+      text document_id PK
+      int ai_enabled
+      text allowed_roles_csv
+      int daily_quota
+      text updated_at
+    }
+
+    AI_JOBS {
+      text job_id PK
+      text document_id FK
+      text user_id FK
+      text action_type
+      text status
+      text request_json
+      text result_json
+      text error_code
+      text error_message
+      text base_version_id FK
+      text created_at
+      text updated_at
+    }
+
+    EXPORT_JOBS {
+      text job_id PK
+      text document_id FK
+      text user_id FK
+      text format
+      text status
+      text result_json
+      text created_at
+      text updated_at
+    }
+
+    REALTIME_EVENTS {
+      text event_id PK
+      text document_id FK
+      text event_type
+      text payload_json
+      text created_at
+      text delivered_at
+    }
+
+    IDEMPOTENCY_KEYS {
+      text scope PK
+      text request_id PK
+      int response_status
+      text response_body
+      text created_at
+    }
+
+    AUDIT_LOGS {
+      text event_id PK
+      text actor_user_id FK
+      text document_id FK
+      text action_type
+      text metadata_json
+      text created_at
+    }

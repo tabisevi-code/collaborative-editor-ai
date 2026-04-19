@@ -1,77 +1,85 @@
 import {
   ApiError,
-  type ApiErrorShape,
-  type AiJobResponse,
+  type AiHistoryItemResponse,
   type AiJobFeedbackRequest,
   type AiJobFeedbackResponse,
   type AiPolicyResponse,
-  type CreateExportRequest,
-  type CreateExportResponse,
+  type AiUsageResponse,
+  type AcceptShareLinkResponse,
+  type AuthResponse,
+  type CancelAiJobResponse,
+  type CreateShareLinkRequest,
   type CreateDocumentRequest,
   type CreateDocumentResponse,
+  type CreateExportRequest,
+  type CreateExportResponse,
+  type CurrentUserResponse,
   type DownloadedExportFile,
   type ExportJobStatusResponse,
+  type ForgotPasswordResponse,
   type GetDocumentResponse,
-  type ListVersionsResponse,
+  type ListDocumentsResponse,
   type ListPermissionsResponse,
+  type ListVersionsResponse,
+  type LogoutResponse,
+  type ReadyExportResponse,
   type RealtimeSessionResponse,
+  type ShareLinkCreateResponse,
+  type ShareLinkListResponse,
+  type ShareLinkPreviewResponse,
+  type ShareLinkSummary,
+  type RewriteAiStreamRequest,
+  type SummarizeAiStreamRequest,
+  type TranslateAiStreamRequest,
   type RevokePermissionResponse,
   type RevertToVersionResponse,
-  type RewriteAiJobRequest,
-  type SummarizeAiJobRequest,
-  type TranslateAiJobRequest,
+  type ResetPasswordResponse,
   type UpdateAiPolicyRequest,
   type UpdateDocumentRequest,
   type UpdateDocumentResponse,
   type UpdatePermissionRequest,
   type UpdatePermissionResponse,
+  type ApiErrorShape,
 } from "../types/api";
 
 type FetchLike = typeof fetch;
+type AiStreamPayload = RewriteAiStreamRequest | SummarizeAiStreamRequest | TranslateAiStreamRequest;
 
 export interface ApiClient {
-  createDocument(payload: CreateDocumentRequest, userId?: string): Promise<CreateDocumentResponse>;
-  getDocument(documentId: string, userId?: string): Promise<GetDocumentResponse>;
-  updateDocument(documentId: string, payload: UpdateDocumentRequest, userId?: string): Promise<UpdateDocumentResponse>;
-  listVersions(documentId: string, userId?: string): Promise<ListVersionsResponse>;
-  listPermissions(documentId: string, userId?: string): Promise<ListPermissionsResponse>;
-  updatePermission(
-    documentId: string,
-    payload: UpdatePermissionRequest,
-    userId?: string
-  ): Promise<UpdatePermissionResponse>;
-  revokePermission(documentId: string, targetUserId: string, userId?: string): Promise<RevokePermissionResponse>;
-  getAiPolicy(documentId: string, userId?: string): Promise<AiPolicyResponse>;
-  updateAiPolicy(
-    documentId: string,
-    payload: UpdateAiPolicyRequest,
-    userId?: string
-  ): Promise<AiPolicyResponse>;
-  revertToVersion(
-    documentId: string,
-    payload: { requestId: string; targetVersionId: string },
-    userId?: string
-  ): Promise<RevertToVersionResponse>;
-  requestRewriteJob(payload: RewriteAiJobRequest, userId?: string): Promise<AiJobResponse>;
-  requestSummarizeJob(payload: SummarizeAiJobRequest, userId?: string): Promise<AiJobResponse>;
-  requestTranslateJob(payload: TranslateAiJobRequest, userId?: string): Promise<AiJobResponse>;
-  getAiJobStatus(jobId: string, userId?: string): Promise<AiJobResponse>;
-  recordAiJobFeedback(jobId: string, payload: AiJobFeedbackRequest, userId?: string): Promise<AiJobFeedbackResponse>;
-  createExport(
-    documentId: string,
-    payload: CreateExportRequest,
-    userId?: string
-  ): Promise<CreateExportResponse>;
-  getExportJobStatus(jobId: string, userId?: string): Promise<ExportJobStatusResponse>;
-  downloadExport(jobId: string, userId?: string): Promise<DownloadedExportFile>;
-  createSession(documentId: string, userId?: string): Promise<RealtimeSessionResponse>;
+  setSession(session: { accessToken: string } | null): void;
+  login(payload: { identifier: string; password: string }): Promise<AuthResponse>;
+  register(payload: { identifier: string; displayName: string; password: string }): Promise<AuthResponse>;
+  forgotPassword(payload: { identifier: string }): Promise<ForgotPasswordResponse>;
+  resetPassword(payload: { identifier: string; resetToken: string; newPassword: string }): Promise<ResetPasswordResponse>;
+  refresh(refreshToken: string): Promise<AuthResponse>;
+  logout(refreshToken: string): Promise<LogoutResponse>;
+  getCurrentUser(): Promise<CurrentUserResponse>;
+  listDocuments(_userId?: string): Promise<ListDocumentsResponse>;
+  createDocument(payload: CreateDocumentRequest, _userId?: string): Promise<CreateDocumentResponse>;
+  getDocument(documentId: string, _userId?: string): Promise<GetDocumentResponse>;
+  updateDocument(documentId: string, payload: UpdateDocumentRequest, _userId?: string): Promise<UpdateDocumentResponse>;
+  listVersions(documentId: string, _userId?: string): Promise<ListVersionsResponse>;
+  listPermissions(documentId: string, _userId?: string): Promise<ListPermissionsResponse>;
+  updatePermission(documentId: string, payload: UpdatePermissionRequest, _userId?: string): Promise<UpdatePermissionResponse>;
+  revokePermission(documentId: string, targetUserId: string, _userId?: string): Promise<RevokePermissionResponse>;
+  listShareLinks(documentId: string, _userId?: string): Promise<ShareLinkListResponse>;
+  createShareLink(documentId: string, payload: CreateShareLinkRequest, _userId?: string): Promise<ShareLinkCreateResponse>;
+  revokeShareLink(documentId: string, linkId: string, options?: { revokeAccess?: boolean }, _userId?: string): Promise<ShareLinkSummary>;
+  previewShareLink(shareToken: string): Promise<ShareLinkPreviewResponse>;
+  acceptShareLink(shareToken: string): Promise<AcceptShareLinkResponse>;
+  getAiPolicy(documentId: string, _userId?: string): Promise<AiPolicyResponse>;
+  getAiUsage(documentId: string, _userId?: string): Promise<AiUsageResponse>;
+  updateAiPolicy(documentId: string, payload: UpdateAiPolicyRequest, _userId?: string): Promise<AiPolicyResponse>;
+  revertToVersion(documentId: string, payload: { requestId: string; targetVersionId: string }, _userId?: string): Promise<RevertToVersionResponse>;
+  startAiStream(action: "rewrite" | "summarize" | "translate", payload: AiStreamPayload, signal?: AbortSignal): Promise<Response>;
+  listAiHistory(documentId: string, _userId?: string): Promise<AiHistoryItemResponse[]>;
+  cancelAiJob(jobId: string, _userId?: string): Promise<CancelAiJobResponse>;
+  recordAiJobFeedback(jobId: string, payload: AiJobFeedbackRequest, _userId?: string): Promise<AiJobFeedbackResponse>;
+  createExport(documentId: string, payload: CreateExportRequest, _userId?: string): Promise<CreateExportResponse>;
+  getExportJobStatus(jobId: string, _userId?: string): Promise<ExportJobStatusResponse>;
+  downloadExport(jobId: string, _userId?: string): Promise<DownloadedExportFile>;
+  createSession(documentId: string, _userId?: string): Promise<RealtimeSessionResponse>;
 }
-
-interface LoginResponse {
-  accessToken: string;
-}
-
-const accessTokenCache = new Map<string, string>();
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
@@ -131,89 +139,39 @@ function parseContentDispositionFileName(headerValue: string | null): string | n
 
 export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): ApiClient {
   const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
+  let accessToken: string | null = null;
 
-  async function login(userId: string): Promise<string> {
-    const normalizedUserId = userId.trim();
-    if (!normalizedUserId) {
-      throw new ApiError(401, "AUTH_REQUIRED", "user id is required");
-    }
-
-    const cachedToken = accessTokenCache.get(normalizedUserId);
-    if (cachedToken) {
-      return cachedToken;
-    }
-
-    const response = await fetchImpl(`${resolvedBaseUrl}/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ userId: normalizedUserId }),
-    });
-
-    const payload = await parseJson(response);
-    if (!response.ok) {
-      throw toApiError(response.status, payload);
-    }
-
-    const accessToken = (payload as LoginResponse).accessToken;
-    accessTokenCache.set(normalizedUserId, accessToken);
-    return accessToken;
-  }
-
-  async function request<T>(path: string, init: RequestInit, userId?: string): Promise<T> {
+  async function request<T>(path: string, init: RequestInit = {}, options?: { withAuth?: boolean }): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set("Content-Type", "application/json");
+    if (init.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (options?.withAuth !== false && accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
 
     try {
-      if (userId?.trim()) {
-        const accessToken = await login(userId);
-        headers.set("Authorization", `Bearer ${accessToken}`);
-      }
-
-      console.info("[frontend-api] request", {
-        method: init.method || "GET",
-        url: `${resolvedBaseUrl}${path}`,
-        userId,
-      });
-
       const response = await fetchImpl(`${resolvedBaseUrl}${path}`, {
         ...init,
         headers,
       });
       const payload = await parseJson(response);
-
       if (!response.ok) {
         throw toApiError(response.status, payload);
       }
-
       return payload as T;
     } catch (error) {
-      const normalizedError = toUnexpectedError(error);
-      console.warn("[frontend-api] request_failed", {
-        code: normalizedError.code,
-        status: normalizedError.status,
-        message: normalizedError.message,
-      });
-      throw normalizedError;
+      throw toUnexpectedError(error);
     }
   }
 
-  async function requestBlob(path: string, init: RequestInit, userId?: string): Promise<DownloadedExportFile> {
+  async function requestBlob(path: string, init: RequestInit = {}): Promise<DownloadedExportFile> {
     const headers = new Headers(init.headers);
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
 
     try {
-      if (userId?.trim()) {
-        const accessToken = await login(userId);
-        headers.set("Authorization", `Bearer ${accessToken}`);
-      }
-
-      console.info("[frontend-api] request_blob", {
-        method: init.method || "GET",
-        url: `${resolvedBaseUrl}${path}`,
-        userId,
-      });
-
       const response = await fetchImpl(`${resolvedBaseUrl}${path}`, {
         ...init,
         headers,
@@ -227,8 +185,7 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
       const blob = await response.blob();
       return {
         blob,
-        fileName:
-          parseContentDispositionFileName(response.headers.get("Content-Disposition")) || "download.bin",
+        fileName: parseContentDispositionFileName(response.headers.get("Content-Disposition")) || "download.bin",
         contentType: response.headers.get("Content-Type") || "application/octet-stream",
       };
     } catch (error) {
@@ -237,206 +194,210 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
   }
 
   return {
-    createDocument(payload, userId) {
-      return request<CreateDocumentResponse>(
-        "/documents",
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
-      );
+    setSession(session) {
+      accessToken = session?.accessToken || null;
     },
 
-    getDocument(documentId, userId) {
-      return request<GetDocumentResponse>(
-        `/documents/${encodeURIComponent(documentId)}`,
-        { method: "GET" },
-        userId
-      );
+    login(payload) {
+      return request<AuthResponse>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }, { withAuth: false });
     },
 
-    updateDocument(documentId, payload, userId) {
+    register(payload) {
+      return request<AuthResponse>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }, { withAuth: false });
+    },
+
+    forgotPassword(payload) {
+      return request<ForgotPasswordResponse>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }, { withAuth: false });
+    },
+
+    resetPassword(payload) {
+      return request<ResetPasswordResponse>("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }, { withAuth: false });
+    },
+
+    refresh(refreshToken) {
+      return request<AuthResponse>("/auth/refresh", {
+        method: "POST",
+        body: JSON.stringify({ refreshToken }),
+      }, { withAuth: false });
+    },
+
+    logout(refreshToken) {
+      return request<LogoutResponse>("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ refreshToken }),
+      });
+    },
+
+    getCurrentUser() {
+      return request<CurrentUserResponse>("/auth/me", { method: "GET" });
+    },
+
+    listDocuments() {
+      return request<ListDocumentsResponse>("/documents", { method: "GET" });
+    },
+
+    createDocument(payload) {
+      return request<CreateDocumentResponse>("/documents", { method: "POST", body: JSON.stringify(payload) });
+    },
+
+    getDocument(documentId) {
+      return request<GetDocumentResponse>(`/documents/${encodeURIComponent(documentId)}`, { method: "GET" });
+    },
+
+    updateDocument(documentId, payload) {
       return request<UpdateDocumentResponse>(
         `/documents/${encodeURIComponent(documentId)}/content`,
-        { method: "PUT", body: JSON.stringify(payload) },
-        userId
+        { method: "PUT", body: JSON.stringify(payload) }
       );
     },
 
-    listVersions(documentId, userId) {
-      return request<ListVersionsResponse>(
-        `/documents/${encodeURIComponent(documentId)}/versions`,
-        { method: "GET" },
-        userId
-      );
+    listVersions(documentId) {
+      return request<ListVersionsResponse>(`/documents/${encodeURIComponent(documentId)}/versions`, { method: "GET" });
     },
 
-    listPermissions(documentId, userId) {
-      return request<ListPermissionsResponse>(
-        `/documents/${encodeURIComponent(documentId)}/permissions`,
-        { method: "GET" },
-        userId
-      );
+    listPermissions(documentId) {
+      return request<ListPermissionsResponse>(`/documents/${encodeURIComponent(documentId)}/permissions`, { method: "GET" });
     },
 
-    updatePermission(documentId, payload, userId) {
+    updatePermission(documentId, payload) {
       return request<UpdatePermissionResponse>(
         `/documents/${encodeURIComponent(documentId)}/permissions`,
-        { method: "PUT", body: JSON.stringify(payload) },
-        userId
+        { method: "PUT", body: JSON.stringify(payload) }
       );
     },
 
-    revokePermission(documentId, targetUserId, userId) {
+    revokePermission(documentId, targetUserId) {
       return request<RevokePermissionResponse>(
         `/documents/${encodeURIComponent(documentId)}/permissions/${encodeURIComponent(targetUserId)}`,
-        { method: "DELETE" },
-        userId
+        { method: "DELETE" }
       );
     },
 
-    getAiPolicy(documentId, userId) {
+    listShareLinks(documentId) {
+      return request<ShareLinkListResponse>(`/documents/${encodeURIComponent(documentId)}/share-links`, { method: "GET" });
+    },
+
+    createShareLink(documentId, payload) {
+      return request<ShareLinkCreateResponse>(
+        `/documents/${encodeURIComponent(documentId)}/share-links`,
+        { method: "POST", body: JSON.stringify(payload) }
+      );
+    },
+
+    revokeShareLink(documentId, linkId, options) {
+      const search = new URLSearchParams();
+      if (options?.revokeAccess) {
+        search.set("revokeAccess", "true");
+      }
+      return request<ShareLinkSummary>(
+        `/documents/${encodeURIComponent(documentId)}/share-links/${encodeURIComponent(linkId)}${search.toString() ? `?${search.toString()}` : ""}`,
+        { method: "DELETE" }
+      );
+    },
+
+    previewShareLink(shareToken) {
+      return request<ShareLinkPreviewResponse>(`/share-links/${encodeURIComponent(shareToken)}`, { method: "GET" }, { withAuth: false });
+    },
+
+    acceptShareLink(shareToken) {
+      return request<AcceptShareLinkResponse>(`/share-links/${encodeURIComponent(shareToken)}/accept`, { method: "POST" });
+    },
+
+    getAiPolicy(documentId) {
+      return request<AiPolicyResponse>(`/documents/${encodeURIComponent(documentId)}/ai-policy`, { method: "GET" });
+    },
+
+    getAiUsage(documentId) {
+      return request<AiUsageResponse>(`/documents/${encodeURIComponent(documentId)}/ai-usage`, { method: "GET" });
+    },
+
+    updateAiPolicy(documentId, payload) {
       return request<AiPolicyResponse>(
         `/documents/${encodeURIComponent(documentId)}/ai-policy`,
-        { method: "GET" },
-        userId
+        { method: "PUT", body: JSON.stringify(payload) }
       );
     },
 
-    updateAiPolicy(documentId, payload, userId) {
-      return request<AiPolicyResponse>(
-        `/documents/${encodeURIComponent(documentId)}/ai-policy`,
-        { method: "PUT", body: JSON.stringify(payload) },
-        userId
-      );
-    },
-
-    revertToVersion(documentId, payload, userId) {
+    revertToVersion(documentId, payload) {
       return request<RevertToVersionResponse>(
         `/documents/${encodeURIComponent(documentId)}/revert`,
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
+        { method: "POST", body: JSON.stringify(payload) }
       );
     },
 
-    async requestRewriteJob(payload, userId) {
-      const response = await request<{
-        jobId: string;
-        status?: AiJobResponse["status"];
-        statusUrl?: string;
-        baseVersionId?: string;
-        createdAt?: string;
-        updatedAt?: string;
-      }>(
-        "/ai/rewrite",
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
-      );
-      return {
-        ...response,
-        statusUrl: response.statusUrl || `/ai/jobs/${response.jobId}`,
-        status: response.status || "PENDING",
-      };
+    async startAiStream(action, payload, signal) {
+      const headers = new Headers({ "Content-Type": "application/json" });
+      if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+      }
+
+      const response = await fetchImpl(`${resolvedBaseUrl}/ai/${action}/stream`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal,
+      });
+
+      if (!response.ok) {
+        const payloadJson = await parseJson(response);
+        throw toApiError(response.status, payloadJson);
+      }
+
+      return response;
     },
 
-    async requestSummarizeJob(payload, userId) {
-      const response = await request<{
-        jobId: string;
-        status?: AiJobResponse["status"];
-        statusUrl?: string;
-        baseVersionId?: string;
-        createdAt?: string;
-        updatedAt?: string;
-      }>(
-        "/ai/summarize",
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
-      );
-      return {
-        ...response,
-        statusUrl: response.statusUrl || `/ai/jobs/${response.jobId}`,
-        status: response.status || "PENDING",
-      };
+    listAiHistory(documentId) {
+      return request<AiHistoryItemResponse[]>(`/documents/${encodeURIComponent(documentId)}/ai-history`, { method: "GET" });
     },
 
-    async requestTranslateJob(payload, userId) {
-      const response = await request<{
-        jobId: string;
-        status?: AiJobResponse["status"];
-        statusUrl?: string;
-        baseVersionId?: string;
-        createdAt?: string;
-        updatedAt?: string;
-      }>(
-        "/ai/translate",
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
-      );
-      return {
-        ...response,
-        statusUrl: response.statusUrl || `/ai/jobs/${response.jobId}`,
-        status: response.status || "PENDING",
-      };
+    cancelAiJob(jobId) {
+      return request<CancelAiJobResponse>(`/ai/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
     },
 
-    async getAiJobStatus(jobId, userId) {
-      const payload = await request<{
-        jobId: string;
-        status: AiJobResponse["status"];
-        proposedText?: string;
-        errorCode?: string;
-        errorMessage?: string;
-        baseVersionId?: string;
-        createdAt?: string;
-        updatedAt?: string;
-      }>(`/ai/jobs/${encodeURIComponent(jobId)}`, { method: "GET" }, userId);
-
-      return {
-        jobId: payload.jobId,
-        statusUrl: `/ai/jobs/${payload.jobId}`,
-        status: payload.status,
-        output: payload.proposedText,
-        proposedText: payload.proposedText,
-        errorCode: payload.errorCode,
-        errorMessage: payload.errorMessage,
-        baseVersionId: payload.baseVersionId,
-        createdAt: payload.createdAt,
-        updatedAt: payload.updatedAt,
-      };
+    recordAiJobFeedback(jobId, payload) {
+      return request<AiJobFeedbackResponse>(`/ai/jobs/${encodeURIComponent(jobId)}/feedback`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
     },
 
-    recordAiJobFeedback(jobId, payload, userId) {
-      return request<AiJobFeedbackResponse>(
-        `/ai/jobs/${encodeURIComponent(jobId)}/feedback`,
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
-      );
-    },
-
-    createExport(documentId, payload, userId) {
-      return request<CreateExportResponse>(
+    async createExport(documentId, payload) {
+      const response = await request<CreateExportResponse>(
         `/documents/${encodeURIComponent(documentId)}/export`,
-        { method: "POST", body: JSON.stringify(payload) },
-        userId
+        { method: "POST", body: JSON.stringify(payload) }
       );
+
+      if ("content" in response) {
+        return response as ReadyExportResponse;
+      }
+      return response;
     },
 
-    getExportJobStatus(jobId, userId) {
-      return request<ExportJobStatusResponse>(
-        `/exports/${encodeURIComponent(jobId)}`,
-        { method: "GET" },
-        userId
-      );
+    getExportJobStatus(jobId) {
+      return request<ExportJobStatusResponse>(`/exports/${encodeURIComponent(jobId)}`, { method: "GET" });
     },
 
-    downloadExport(jobId, userId) {
-      return requestBlob(`/exports/${encodeURIComponent(jobId)}/download`, { method: "GET" }, userId);
+    downloadExport(jobId) {
+      return requestBlob(`/exports/${encodeURIComponent(jobId)}/download`, { method: "GET" });
     },
 
-    createSession(documentId, userId) {
-      return request<RealtimeSessionResponse>(
-        "/sessions",
-        { method: "POST", body: JSON.stringify({ documentId }) },
-        userId
-      );
+    createSession(documentId) {
+      return request<RealtimeSessionResponse>("/sessions", {
+        method: "POST",
+        body: JSON.stringify({ documentId }),
+      });
     },
   };
 }

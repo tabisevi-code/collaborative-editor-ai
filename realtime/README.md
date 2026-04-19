@@ -2,6 +2,8 @@
 
 This service hosts the WebSocket layer for collaborative editing.
 
+Professors and evaluators usually do not need to interact with this service directly. The easiest path is to start the full stack from the repo root and exercise collaboration through the frontend.
+
 For repo-wide install, dev, and test commands, start from the root README:
 
 ```bash

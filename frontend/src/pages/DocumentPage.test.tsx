@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import type { ApiClient } from "../services/api";
+import type { DashboardService } from "../services/dashboard";
 import { ApiError, type GetDocumentResponse } from "../types/api";
 import { DocumentPage } from "./DocumentPage";
 
@@ -21,6 +22,15 @@ vi.mock("../services/realtime", () => ({
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    setSession: vi.fn(),
+    login: vi.fn(),
+    register: vi.fn(),
+    forgotPassword: vi.fn(),
+    resetPassword: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+    getCurrentUser: vi.fn(),
+    listDocuments: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -28,13 +38,27 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     listPermissions: vi.fn(),
     updatePermission: vi.fn(),
     revokePermission: vi.fn(),
+    listShareLinks: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
+    previewShareLink: vi.fn(),
+    acceptShareLink: vi.fn(),
     getAiPolicy: vi.fn(),
+    getAiUsage: vi.fn(async () => ({
+      documentId: "doc_123",
+      aiEnabled: true,
+      dailyQuota: 5,
+      usedToday: 0,
+      remainingToday: 5,
+      allowedRolesForAI: ["owner", "editor"],
+      currentUserRole: "owner",
+      canUseAi: true,
+    })),
     updateAiPolicy: vi.fn(),
     revertToVersion: vi.fn(),
-    requestRewriteJob: vi.fn(),
-    requestSummarizeJob: vi.fn(),
-    requestTranslateJob: vi.fn(),
-    getAiJobStatus: vi.fn(),
+    startAiStream: vi.fn(),
+    listAiHistory: vi.fn(),
+    cancelAiJob: vi.fn(),
     recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
     getExportJobStatus: vi.fn(),
@@ -44,7 +68,16 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   };
 }
 
-function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
+function createDashboardServiceMock(overrides: Partial<DashboardService> = {}): DashboardService {
+  return {
+    listDocuments: vi.fn(async () => ({ owned: [], shared: [] })),
+    rememberCreatedDocument: vi.fn(async () => {}),
+    rememberDocument: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
+function renderDocumentPage(apiClient: ApiClient, dashboardService = createDashboardServiceMock(), userId = "user_1") {
   return render(
     <MemoryRouter
       initialEntries={["/documents/doc_123"]}
@@ -54,11 +87,29 @@ function renderDocumentPage(apiClient: ApiClient, userId = "user_1") {
         <Route path="/" element={<div>Home Route</div>} />
         <Route
           path="/documents/:documentId"
-          element={<DocumentPage apiClient={apiClient} userId={userId} onUserIdChange={vi.fn()} />}
+          element={
+            <DocumentPage
+              apiClient={apiClient}
+              dashboardService={dashboardService}
+              userId={userId}
+              displayName="User One"
+              onSignOut={vi.fn()}
+            />
+          }
         />
       </Routes>
     </MemoryRouter>
   );
+}
+
+function getPageEditor(pageNumber = 1) {
+  void pageNumber;
+  return screen.getByLabelText(/Document content/i);
+}
+
+function clickFileMenuSave() {
+  fireEvent.click(screen.getByRole("button", { name: "File" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /save/i }));
 }
 
 async function resolveRealtimeConnection(text = "Original body") {
@@ -95,14 +146,13 @@ describe("DocumentPage", () => {
       }) satisfies GetDocumentResponse),
     });
 
-    renderDocumentPage(apiClient, "user_2");
-    await resolveRealtimeConnection("Read only text");
+    renderDocumentPage(apiClient, createDashboardServiceMock(), "user_2");
 
     await waitFor(() => {
-      expect(screen.getByText(/viewer access/i)).toBeInTheDocument();
+      expect(screen.getByText("View-only")).toBeInTheDocument();
     });
 
-    expect(screen.getByLabelText("Document content")).toHaveAttribute("readonly");
+    expect(getPageEditor()).toHaveAttribute("contenteditable", "false");
   });
 
   it("renders remote collaborative text updates without refreshing", async () => {
@@ -121,14 +171,16 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
 
     await act(async () => {
       options?.onTextChange?.("Remote collaborator update");
     });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue("Remote collaborator update")).toBeInTheDocument();
+      expect(getPageEditor()).toHaveTextContent("Remote collaborator update");
     });
   });
 
@@ -155,7 +207,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
     await act(async () => {
       options?.onTextChange?.("Collaborative draft");
     });
@@ -165,7 +219,7 @@ describe("DocumentPage", () => {
       expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Save"));
+    clickFileMenuSave();
 
     await waitFor(() => {
       expect(apiClient.updateDocument).toHaveBeenCalledWith(
@@ -220,6 +274,15 @@ describe("DocumentPage", () => {
           currentVersionId: "ver_2",
           role: "editor",
           revisionId: "rev_2",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValue({
+          documentId: "doc_123",
+          title: "Conflict Doc",
+          content: "Fresh body",
+          updatedAt: "2026-04-02T00:05:00.000Z",
+          currentVersionId: "ver_2",
+          role: "editor",
+          revisionId: "rev_2",
         } satisfies GetDocumentResponse),
       updateDocument: vi.fn(async () => {
         throw new ApiError(409, "CONFLICT", "base revision is stale", {
@@ -232,7 +295,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
     await act(async () => {
       options?.onTextChange?.("Changed collaboratively");
     });
@@ -242,7 +307,7 @@ describe("DocumentPage", () => {
       expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Save"));
+    clickFileMenuSave();
 
     await waitFor(() => {
       expect(screen.getByText(/reload latest saved version/i)).toBeInTheDocument();
@@ -253,6 +318,121 @@ describe("DocumentPage", () => {
     await waitFor(() => {
       expect(mockRealtimeService.applyRemoteReset).toHaveBeenCalledWith("Fresh body");
     });
+  });
+
+  it("retries once with the latest revision during live collaboration before surfacing a stale conflict", async () => {
+    const conflictError = new ApiError(409, "CONFLICT", "base revision is stale", {
+      expectedRevisionId: "rev_2",
+      actualRevisionId: "rev_1",
+    });
+
+    const apiClient = createApiClientMock({
+      getDocument: vi
+        .fn()
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Retry Doc",
+          content: "Original body",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          currentVersionId: "ver_1",
+          role: "editor",
+          revisionId: "rev_1",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Retry Doc",
+          content: "Remote body",
+          updatedAt: "2026-04-02T00:02:00.000Z",
+          currentVersionId: "ver_2",
+          role: "editor",
+          revisionId: "rev_2",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValue({
+          documentId: "doc_123",
+          title: "Retry Doc",
+          content: "Merged body",
+          updatedAt: "2026-04-02T00:03:00.000Z",
+          currentVersionId: "ver_3",
+          role: "editor",
+          revisionId: "rev_3",
+        } satisfies GetDocumentResponse),
+      updateDocument: vi
+        .fn()
+        .mockRejectedValueOnce(conflictError)
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          updatedAt: "2026-04-02T00:03:00.000Z",
+          revisionId: "rev_3",
+        }),
+    });
+
+    renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
+
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
+
+    await act(async () => {
+      options?.onTextChange?.("Merged body");
+    });
+    mockRealtimeService.getText.mockReturnValue("Merged body");
+
+    await waitFor(
+      () => {
+        expect(apiClient.updateDocument).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 2500 }
+    );
+
+    expect(screen.queryByText(/reload latest saved version/i)).not.toBeInTheDocument();
+  });
+
+  it("refreshes metadata after a realtime revert without applying a second local CRDT reset", async () => {
+    const apiClient = createApiClientMock({
+      getDocument: vi
+        .fn()
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Revert Doc",
+          content: "Original body",
+          updatedAt: "2026-04-02T00:00:00.000Z",
+          currentVersionId: "ver_1",
+          role: "owner",
+          revisionId: "rev_1",
+        } satisfies GetDocumentResponse)
+        .mockResolvedValueOnce({
+          documentId: "doc_123",
+          title: "Revert Doc",
+          content: "Reverted body",
+          updatedAt: "2026-04-02T00:04:00.000Z",
+          currentVersionId: "ver_3",
+          role: "owner",
+          revisionId: "rev_3",
+        } satisfies GetDocumentResponse),
+    });
+
+    renderDocumentPage(apiClient);
+    const options = await resolveRealtimeConnection("Original body");
+
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
+
+    await act(async () => {
+      options?.onDocumentReverted?.({
+        documentId: "doc_123",
+        currentVersionId: "ver_3",
+        revisionId: "rev_3",
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/remote revert was applied/i)).toBeInTheDocument();
+    });
+
+    expect(mockRealtimeService.applyRemoteReset).not.toHaveBeenCalled();
+    expect(mockRealtimeService.connect).toHaveBeenCalledTimes(2);
   });
 
   it("autosaves collaborative changes after a short debounce", async () => {
@@ -287,7 +467,9 @@ describe("DocumentPage", () => {
     renderDocumentPage(apiClient);
     const options = await resolveRealtimeConnection("Original body");
 
-    await screen.findByDisplayValue("Original body");
+    await waitFor(() => {
+      expect(getPageEditor()).toHaveTextContent("Original body");
+    });
     await act(async () => {
       options?.onTextChange?.("Autosaved draft");
     });

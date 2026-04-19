@@ -17,3 +17,5 @@ Editable sources:
 - `er-diagram.mmd`
 
 The Mermaid sources are the canonical editable versions for coursework updates and report alignment.
+
+Whenever a `.mmd` file changes, re-render the matching PNG export before using the diagram in the final report or README so the rendered images and editable sources stay aligned.
