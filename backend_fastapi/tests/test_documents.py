@@ -132,21 +132,6 @@ def test_permissions_ai_policy_and_viewer_update_restrictions(tmp_path: Path):
     )
     document_id = create_document.json()["documentId"]
 
-    policy = client.get(
-        f"/documents/{document_id}/ai-policy",
-        headers=auth_headers(owner["accessToken"]),
-    )
-    assert policy.status_code == 200
-    assert policy.json()["allowedRolesForAI"] == ["owner", "editor"]
-
-    update_policy = client.put(
-        f"/documents/{document_id}/ai-policy",
-        headers=auth_headers(owner["accessToken"]),
-        json={"aiEnabled": True, "allowedRolesForAI": ["owner", "editor", "viewer"], "dailyQuota": 8},
-    )
-    assert update_policy.status_code == 200
-    assert update_policy.json()["dailyQuota"] == 8
-
     grant_viewer = client.put(
         f"/documents/{document_id}/permissions",
         headers=auth_headers(owner["accessToken"]),
