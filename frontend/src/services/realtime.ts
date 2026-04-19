@@ -60,6 +60,7 @@ const MESSAGE_AWARENESS = 1;
 const LOCAL_TEXT_ORIGIN = Symbol("local-text-origin");
 const LOCAL_RESET_ORIGIN = Symbol("local-reset-origin");
 const RECONNECT_DELAY_MS = 1000;
+const REALTIME_PROTOCOL = "collab.realtime.v1";
 
 function mapSelection(selection: TextSelection | null | undefined): TextSelection | null {
   if (!selection) {
@@ -261,7 +262,7 @@ export function createRealtimeService(apiClient: ApiClient): RealtimeService {
       currentRole = session.role;
       options.onPermissionChange?.(session.role);
 
-      const ws = new WebSocket(session.wsUrl);
+      const ws = new WebSocket(session.wsUrl, [REALTIME_PROTOCOL, `auth.${session.sessionToken}`]);
       ws.binaryType = "arraybuffer";
       socket = ws;
 

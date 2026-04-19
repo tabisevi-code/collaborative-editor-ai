@@ -114,13 +114,24 @@ export function DocHeader({
         <div className="gdoc-topbar-right">
           <button
             className="btn btn-sm btn-ai"
+            data-testid="open-ai-panel"
             onClick={onAiOpen}
             disabled={isReadOnly}
             title={isReadOnly ? "AI unavailable in view-only mode" : "AI Assistant"}
           >
             ✨ AI
           </button>
-          <button className="gd-icon-btn" onClick={onHistoryOpen} title="Version history" aria-label="Version history">
+          {onAiPolicyOpen && role === "owner" && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onAiPolicyOpen}
+              title="AI Policy"
+              aria-label="AI Policy"
+            >
+              AI Policy
+            </button>
+          )}
+          <button className="gd-icon-btn" data-testid="open-version-history" onClick={onHistoryOpen} title="Version history" aria-label="Version history">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
@@ -177,9 +188,22 @@ export function DocHeader({
 
         <div className="gdoc-toolbar-sep" />
 
-        <select className="gdoc-tb-select" defaultValue="normal" title="Paragraph style" style={{ width: 120 }}>
-          {["Normal text", "Title", "Subtitle", "Heading 1", "Heading 2", "Heading 3"].map((s) => (
-            <option key={s} value={s}>{s}</option>
+        <select
+          className="gdoc-tb-select"
+          defaultValue="paragraph"
+          title="Paragraph style"
+          style={{ width: 120 }}
+          disabled={!canFormat}
+          onChange={(event) => onToolbarAction?.(event.target.value as ToolbarAction)}
+        >
+          {[
+            ["paragraph", "Normal text"],
+            ["heading1", "Heading 1"],
+            ["heading2", "Heading 2"],
+            ["heading3", "Heading 3"],
+            ["codeBlock", "Code block"],
+          ].map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
           ))}
         </select>
 

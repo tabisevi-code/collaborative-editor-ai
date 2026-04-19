@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, type FormEvent } from "react";
 
 import { toAuthError, useAuth } from "../auth/AuthContext";
@@ -14,10 +14,12 @@ function mapLoginError(error: ReturnType<typeof toAuthError>): string {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, authStatus } = useAuth();
   const [identifier, setIdentifier] = useState("user_1");
   const [password, setPassword] = useState("demo-pass");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const nextPath = new URLSearchParams(location.search).get("next") || "/";
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -28,7 +30,7 @@ export function LoginPage() {
         identifier,
         password,
       });
-      navigate("/", { replace: true });
+      navigate(nextPath, { replace: true });
     } catch (error) {
       setErrorMessage(mapLoginError(toAuthError(error)));
     }
@@ -40,8 +42,7 @@ export function LoginPage() {
         <div className="login-brand">Collaborative Editor AI</div>
         <h1>Sign in</h1>
         <p>
-          Sign in with a registered account or use one of the current demo identifiers while the
-          FastAPI auth contract is still being finalized.
+          Sign in with your Assignment 2 account to access your collaborative documents and AI history.
         </p>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -95,8 +96,14 @@ export function LoginPage() {
         </form>
 
         <p className="auth-footer-copy">
+          <Link to="/forgot-password" className="auth-link">
+            Forgot password?
+          </Link>
+        </p>
+
+        <p className="auth-footer-copy">
           Need an account?{" "}
-          <Link to="/register" className="auth-link">
+          <Link to={`/register${location.search}`} className="auth-link">
             Create one
           </Link>
         </p>

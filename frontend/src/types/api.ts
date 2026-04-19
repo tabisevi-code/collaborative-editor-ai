@@ -1,9 +1,29 @@
-export interface LoginResponse {
+export interface AuthResponse {
   userId: string;
   displayName: string;
-  globalRole: "user" | "admin";
   accessToken: string;
+  refreshToken: string;
   expiresIn: number;
+}
+
+export interface CurrentUserResponse {
+  userId: string;
+  displayName: string;
+}
+
+export interface LogoutResponse {
+  revoked: boolean;
+}
+
+export interface ForgotPasswordResponse {
+  accepted: boolean;
+  message: string;
+  resetToken: string | null;
+  expiresAt: string | null;
+}
+
+export interface ResetPasswordResponse {
+  reset: boolean;
 }
 
 export interface CreateDocumentRequest {
@@ -20,13 +40,28 @@ export interface CreateDocumentResponse {
   currentVersionId: string;
 }
 
+export type DocumentRole = "owner" | "editor" | "viewer";
+
+export interface DashboardDocumentSummary {
+  documentId: string;
+  title: string;
+  role: DocumentRole;
+  updatedAt: string;
+  ownerDisplayName?: string;
+}
+
+export interface ListDocumentsResponse {
+  owned: DashboardDocumentSummary[];
+  shared: DashboardDocumentSummary[];
+}
+
 export interface GetDocumentResponse {
   documentId: string;
   title: string;
   content: string;
   updatedAt: string;
   currentVersionId: string;
-  role: "owner" | "editor" | "viewer";
+  role: DocumentRole;
   revisionId: string;
 }
 
@@ -51,16 +86,12 @@ export interface VersionSummary {
   createdAt: string;
   createdBy: string;
   reason: string;
+  snapshotContent?: string | null;
 }
 
 export interface ListVersionsResponse {
+  documentId: string;
   versions: VersionSummary[];
-  nextCursor?: string;
-}
-
-export interface RevertToVersionRequest {
-  requestId: string;
-  targetVersionId: string;
 }
 
 export interface RevertToVersionResponse {
@@ -69,8 +100,6 @@ export interface RevertToVersionResponse {
   revertedFromVersionId: string;
   updatedAt: string;
 }
-
-export type DocumentRole = "owner" | "editor" | "viewer";
 
 export interface DocumentPermissionMember {
   userId: string;
@@ -102,11 +131,53 @@ export interface RevokePermissionResponse {
   revoked: boolean;
 }
 
+export interface CreateShareLinkRequest {
+  role: Extract<DocumentRole, "editor" | "viewer">;
+  expiresInHours: number;
+  requestId?: string;
+}
+
+export interface ShareLinkSummary {
+  linkId: string;
+  role: Extract<DocumentRole, "editor" | "viewer">;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt?: string | null;
+  lastClaimedAt?: string | null;
+  active: boolean;
+  revokedAccessCount?: number | null;
+}
+
+export interface ShareLinkCreateResponse extends ShareLinkSummary {
+  shareToken: string;
+}
+
+export interface ShareLinkListResponse {
+  documentId: string;
+  links: ShareLinkSummary[];
+}
+
+export interface ShareLinkPreviewResponse {
+  documentId: string;
+  documentTitle: string;
+  role: Extract<DocumentRole, "editor" | "viewer">;
+  expiresAt: string;
+  ownerDisplayName?: string;
+}
+
+export interface AcceptShareLinkResponse {
+  documentId: string;
+  role: DocumentRole;
+  accepted: boolean;
+}
+
 export interface AiPolicyResponse {
   documentId: string;
   aiEnabled: boolean;
   allowedRolesForAI: DocumentRole[];
   dailyQuota: number;
+  usedToday: number;
+  remainingToday: number;
   updatedAt: string;
 }
 
@@ -116,43 +187,15 @@ export interface UpdateAiPolicyRequest {
   dailyQuota: number;
 }
 
-export type AiAction = "rewrite" | "summarize" | "translate";
-
-export interface TextSelection {
-  start: number;
-  end: number;
-}
-
-export interface RewriteAiJobRequest {
+export interface AiUsageResponse {
   documentId: string;
-  selection: TextSelection;
-  selectedText: string;
-  contextBefore?: string;
-  contextAfter?: string;
-  instruction: string;
-  baseVersionId: string;
-  requestId: string;
-}
-
-export interface SummarizeAiJobRequest {
-  documentId: string;
-  selection: TextSelection;
-  selectedText: string;
-  contextBefore?: string;
-  contextAfter?: string;
-  baseVersionId: string;
-  requestId: string;
-}
-
-export interface TranslateAiJobRequest {
-  documentId: string;
-  selection: TextSelection;
-  selectedText: string;
-  contextBefore?: string;
-  contextAfter?: string;
-  targetLanguage: string;
-  baseVersionId: string;
-  requestId: string;
+  aiEnabled: boolean;
+  dailyQuota: number;
+  usedToday: number;
+  remainingToday: number;
+  allowedRolesForAI: DocumentRole[];
+  currentUserRole: DocumentRole;
+  canUseAi: boolean;
 }
 
 export interface AiJobResponse {
@@ -162,10 +205,55 @@ export interface AiJobResponse {
   output?: string;
   proposedText?: string;
   errorMessage?: string;
-  errorCode?: string;
-  baseVersionId?: string;
-  createdAt?: string;
-  updatedAt?: string;
+}
+
+export type AiAction = "rewrite" | "summarize" | "translate";
+
+export interface TextSelection {
+  start: number;
+  end: number;
+}
+
+export interface RewriteAiStreamRequest {
+  documentId: string;
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  instruction: string;
+  baseVersionId: string;
+}
+
+export interface SummarizeAiStreamRequest {
+  documentId: string;
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  instruction?: string;
+  baseVersionId: string;
+}
+
+export interface TranslateAiStreamRequest {
+  documentId: string;
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  targetLanguage: string;
+  instruction?: string;
+  baseVersionId: string;
+}
+
+export interface AiHistoryItemResponse {
+  id: string;
+  documentId: string;
+  action: AiAction;
+  promptLabel: string;
+  outputPreview: string;
+  status: "streaming" | "completed" | "accepted" | "edited" | "rejected" | "cancelled" | "failed";
+  createdAt: string;
+  jobId: string;
 }
 
 export type AiJobFeedbackDisposition = "applied_full" | "applied_partial" | "rejected";
@@ -180,6 +268,11 @@ export interface AiJobFeedbackResponse {
   jobId: string;
   disposition: AiJobFeedbackDisposition;
   recordedAt: string;
+}
+
+export interface CancelAiJobResponse {
+  jobId: string;
+  cancelled: boolean;
 }
 
 export type ExportFormat = "txt" | "json" | "pdf" | "docx";
@@ -206,7 +299,7 @@ export type CreateExportResponse = ReadyExportResponse | ExportJobResponse;
 
 export interface ExportJobStatusResponse {
   jobId: string;
-  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+  status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "streaming" | "completed";
   downloadUrl: string | null;
   expiresAt: string | null;
   errorCode?: string;
@@ -222,6 +315,7 @@ export interface DownloadedExportFile {
 export interface RealtimeSessionResponse {
   sessionId: string;
   wsUrl: string;
+  sessionToken: string;
   role: DocumentRole;
 }
 
@@ -233,10 +327,6 @@ export interface ApiErrorShape {
   };
 }
 
-/**
- * A dedicated error object keeps HTTP metadata attached so UI code can map
- * backend failures to friendly banners without losing the original reason.
- */
 export class ApiError extends Error {
   status: number;
   code: string;

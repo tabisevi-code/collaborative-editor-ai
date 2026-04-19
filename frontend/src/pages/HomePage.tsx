@@ -11,6 +11,7 @@ interface HomePageProps {
   dashboardService: DashboardService;
   userId: string;
   displayName: string;
+  searchQuery: string;
 }
 
 function mapError(error: ApiError): string {
@@ -84,7 +85,36 @@ function DocumentListSection({
   );
 }
 
-export function HomePage({ apiClient, dashboardService, userId, displayName }: HomePageProps) {
+function matchesDocument(document: DashboardDocumentSummary, searchQuery: string): boolean {
+  const normalized = searchQuery.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return [document.title, document.documentId, document.ownerDisplayName || "", document.role]
+    .join(" ")
+    .toLowerCase()
+    .includes(normalized);
+}
+
+function sortDocuments(
+  documents: DashboardDocumentSummary[],
+  sortMode: "recent" | "title" | "role"
+): DashboardDocumentSummary[] {
+  const nextDocuments = [...documents];
+  if (sortMode === "title") {
+    nextDocuments.sort((left, right) => left.title.localeCompare(right.title));
+    return nextDocuments;
+  }
+  if (sortMode === "role") {
+    nextDocuments.sort((left, right) => left.role.localeCompare(right.role) || left.title.localeCompare(right.title));
+    return nextDocuments;
+  }
+  nextDocuments.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+  return nextDocuments;
+}
+
+export function HomePage({ apiClient, dashboardService, userId, displayName, searchQuery }: HomePageProps) {
   const navigate = useNavigate();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [title, setTitle] = useState("");
@@ -95,6 +125,7 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
   const [dashboardData, setDashboardData] = useState<DashboardData>({ owned: [], shared: [] });
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<"recent" | "title" | "role">("recent");
 
   async function loadDashboard() {
     setIsLoadingDashboard(true);
@@ -148,6 +179,17 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
     navigate(`/documents/${encodeURIComponent(documentId)}`);
   }
 
+  const filteredOwned = sortDocuments(
+    dashboardData.owned.filter((document) => matchesDocument(document, searchQuery)),
+    sortMode
+  );
+  const filteredShared = sortDocuments(
+    dashboardData.shared.filter((document) => matchesDocument(document, searchQuery)),
+    sortMode
+  );
+
+  const hasActiveSearch = searchQuery.trim().length > 0;
+
   return (
     <div style={{ flex: 1, background: "var(--gd-surface)" }}>
       <div className="templates-strip">
@@ -157,7 +199,7 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
               <h2>Welcome back, {displayName || userId}</h2>
               <p>Open your recent work or start a new document from a clean dashboard flow.</p>
             </div>
-            <a onClick={() => setShowCreateModal(true)}>New document</a>
+              <a data-testid="new-document-trigger" onClick={() => setShowCreateModal(true)}>New document</a>
           </div>
           <div className="templates-grid">
             {TEMPLATES.map((template) => (
@@ -185,6 +227,23 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
       <div className="recent-section">
         <div className="recent-header">
           <h2>Dashboard</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <label htmlFor="dashboard-sort" className="field-hint" style={{ margin: 0 }}>
+              Sort by
+            </label>
+            <select
+              id="dashboard-sort"
+              className="text-input"
+              style={{ width: 160 }}
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as "recent" | "title" | "role")}
+              aria-label="Sort documents"
+            >
+              <option value="recent">Recently updated</option>
+              <option value="title">Title</option>
+              <option value="role">Role</option>
+            </select>
+          </div>
         </div>
 
         <form className="open-doc-form" onSubmit={handleOpenSubmit}>
@@ -211,16 +270,23 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
           <StatusBanner tone="info" title="Loading dashboard" message="Gathering your owned and shared documents." />
         ) : (
           <div className="dashboard-stack">
+            {hasActiveSearch && filteredOwned.length === 0 && filteredShared.length === 0 && (
+              <StatusBanner
+                tone="info"
+                title="No matches"
+                message={`No documents matched "${searchQuery.trim()}". Try a different title, role, or document ID.`}
+              />
+            )}
             <DocumentListSection
               title="Owned by you"
-              documents={dashboardData.owned}
-              emptyMessage="You have not created any documents yet."
+              documents={filteredOwned}
+              emptyMessage={hasActiveSearch ? "No owned documents match the current search." : "You have not created any documents yet."}
               onOpen={openDocument}
             />
             <DocumentListSection
               title="Shared with you"
-              documents={dashboardData.shared}
-              emptyMessage="Shared documents will appear here after you open them."
+              documents={filteredShared}
+              emptyMessage={hasActiveSearch ? "No shared documents match the current search." : "Documents shared with you will appear here."}
               onOpen={openDocument}
             />
           </div>
@@ -265,6 +331,7 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
                 <label className="field-label" htmlFor="new-title">Title</label>
                 <input
                   id="new-title"
+                  data-testid="new-document-title"
                   className="text-input"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
@@ -278,6 +345,7 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
                 </label>
                 <textarea
                   id="new-content"
+                  data-testid="new-document-content"
                   className="text-input"
                   style={{ minHeight: 100, resize: "vertical" }}
                   value={content}
@@ -292,7 +360,7 @@ export function HomePage({ apiClient, dashboardService, userId, displayName }: H
                 <button type="button" className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                <button type="submit" className="btn btn-primary" data-testid="new-document-submit" disabled={isSubmitting}>
                   {isSubmitting ? "Creating..." : "Create"}
                 </button>
               </div>
