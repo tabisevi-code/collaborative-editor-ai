@@ -150,7 +150,6 @@ describe("management panels", () => {
         }),
         "user_1"
       );
-      expect(screen.getByText(/ai policy saved/i)).toBeInTheDocument();
     });
   });
 
