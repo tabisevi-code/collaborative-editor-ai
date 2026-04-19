@@ -127,7 +127,7 @@ export function ExportPanel({ documentId, userId, apiClient, onClose }: ExportPa
   return (
     <>
       <div className="side-panel-overlay" onClick={onClose} />
-      <aside className="side-panel">
+      <aside className="side-panel" data-testid="export-panel">
         <div className="side-panel-header">
           <h3>
             <span>📤</span>
@@ -145,6 +145,7 @@ export function ExportPanel({ documentId, userId, apiClient, onClose }: ExportPa
             </label>
             <select
               id="export-format"
+              data-testid="export-format"
               className="text-input"
               value={format}
               onChange={(event) => setFormat(event.target.value as ExportFormat)}
@@ -156,7 +157,7 @@ export function ExportPanel({ documentId, userId, apiClient, onClose }: ExportPa
               ))}
             </select>
             <p className="field-hint">
-              TXT and JSON download immediately. PDF and DOCX are generated as async jobs.
+              TXT and JSON download immediately. PDF and DOCX are generated as real async exports.
             </p>
           </div>
 
@@ -206,12 +207,13 @@ export function ExportPanel({ documentId, userId, apiClient, onClose }: ExportPa
             Close
           </button>
           {jobStatus?.status === "SUCCEEDED" ? (
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => void handleDownloadAsyncExport()}>
+            <button className="btn btn-primary" data-testid="export-download" style={{ flex: 1 }} onClick={() => void handleDownloadAsyncExport()}>
               Download export
             </button>
           ) : (
             <button
               className="btn btn-primary"
+              data-testid="export-start"
               style={{ flex: 1 }}
               onClick={() => void handleExportRequest()}
               disabled={phase === "requesting" || phase === "polling"}
