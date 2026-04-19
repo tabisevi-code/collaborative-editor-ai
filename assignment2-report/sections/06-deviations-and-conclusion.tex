@@ -1,0 +1,28 @@
+\chapter{Deviations And Conclusion}
+
+\section{Main Deviations From Assignment 1}
+
+The final implementation evolved from the Assignment 1 design in several practical ways:
+
+\begin{itemize}
+  \item FastAPI became the authoritative backend runtime.
+  \item The realtime relay remained a separate Node/Yjs service rather than being absorbed into FastAPI.
+  \item SQLite was retained for portability and reproducibility.
+  \item Local password reset replaced external email delivery for manual evaluation.
+  \item AI provider integration supports both deterministic stub mode and LM Studio-backed mode.
+\end{itemize}
+
+These deviations are documented in the repository because the brief explicitly values explicit deviation
+handling over pretending the first design draft never changed.
+
+\section{Conclusion}
+
+The final Assignment 2 implementation is submission-ready from a feature and verification perspective. It
+implements the required baseline and multiple bonus-tier elements while keeping security, collaboration,
+and AI behaviour explainable. The system now supports a credible live demo path, strong automated tests,
+and enough internal structure for each team member to discuss both their own work and the overall
+architecture.
+
+The most important quality of the submission is not simply that features exist, but that the repository,
+docs, tests, and runtime behaviour all describe the same system. That consistency is what makes the final
+implementation defensible under evaluation.

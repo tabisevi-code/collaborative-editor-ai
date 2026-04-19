@@ -282,19 +282,90 @@ Access tokens are tied to the active refresh-token session, so a refresh invalid
 }
 ```
 
-## AI Routes On This Core Branch
+## AI Streaming
 
-The FastAPI AI routes are intentionally present only as reserved placeholders on this core branch.
+### `POST /ai/rewrite/stream`
 
-- `POST /ai/rewrite/stream`
-- `POST /ai/summarize/stream`
-- `POST /ai/translate/stream`
-- `GET /ai/history/:documentId`
+### `POST /ai/summarize/stream`
 
-Current behavior:
+### `POST /ai/translate/stream`
 
-- these routes return `501 NOT_IMPLEMENTED`
-- the dedicated AI workstream is intentionally left for a separate follow-up branch/PR
+All three endpoints return `text/event-stream` responses.
+
+Event format:
+
+```text
+event: token
+data: {"jobId":"aijob_123","text":"Some"}
+
+event: done
+data: {"jobId":"aijob_123","fullText":"Some streamed result"}
+```
+
+Error event:
+
+```text
+event: error
+data: {"jobId":"aijob_123","code":"AI_FAILED","message":"Provider request failed"}
+```
+
+### `POST /ai/jobs/:jobId/cancel`
+
+```json
+{
+  "jobId": "aijob_123",
+  "cancelled": true
+}
+```
+
+### `POST /ai/jobs/:jobId/feedback`
+
+```json
+{
+  "disposition": "applied_full",
+  "appliedText": "Edited output",
+  "appliedRange": { "start": 0, "end": 12 }
+}
+```
+
+Client-side apply rule:
+
+- AI results are applied only if the current text inside the target range still matches the source text that the suggestion was generated from.
+- If another collaborator changed that source text first, the apply is blocked and the user must re-run AI on the latest text.
+
+## AI History
+
+### `GET /documents/:documentId/ai-history`
+
+```json
+[
+  {
+    "id": "aih_123",
+    "documentId": "doc_123",
+    "action": "rewrite",
+    "promptLabel": "Make this more concise",
+    "outputPreview": "Shortened version",
+    "status": "accepted",
+    "createdAt": "2026-04-05T12:25:00.000Z",
+    "jobId": "aijob_123"
+  }
+]
+```
+
+### `GET /documents/:documentId/ai-usage`
+
+```json
+{
+  "documentId": "doc_123",
+  "aiEnabled": true,
+  "dailyQuota": 5,
+  "usedToday": 1,
+  "remainingToday": 4,
+  "allowedRolesForAI": ["owner", "editor"],
+  "currentUserRole": "editor",
+  "canUseAi": true
+}
+```
 
 ## Standard Error Schema
 

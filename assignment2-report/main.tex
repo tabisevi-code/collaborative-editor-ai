@@ -1,0 +1,59 @@
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{listings}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+  pdftitle={AI1220 Assignment 2 Report - Collaborative Editor with AI Writing Assistant},
+  pdfauthor={Tabina, Noel, Nurtore, Ming Ming}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Collaborative Editor with AI Writing Assistant}
+\fancyhead[R]{AI1220 Assignment 2}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+
+\setlist[itemize]{leftmargin=1.5em}
+\setlist[enumerate]{leftmargin=1.75em}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false
+}
+
+\begin{document}
+
+\input{sections/00-title}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+
+\pagenumbering{arabic}
+
+\input{sections/01-abstract}
+\input{sections/02-system-overview}
+\input{sections/03-implementation}
+\input{sections/04-ai-and-collaboration}
+\input{sections/05-testing-and-quality}
+\input{sections/06-deviations-and-conclusion}
+
+\end{document}

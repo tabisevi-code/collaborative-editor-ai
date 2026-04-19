@@ -6,7 +6,8 @@ It provides:
 
 - register, login, refresh, logout, and `/auth/me`
 - protected document CRUD, permissions, share-links, versions, revert, and sessions
-- AI routes are present as reserved placeholders for the dedicated AI workstream
+- backend-streamed AI rewrite/summarize/translate
+- AI history, AI policy, AI usage, and feedback/cancel routes
 - export routes plus real PDF/DOCX generation
 - idempotent save, share-link creation, and revert routes
 - FastAPI OpenAPI docs at `/docs`

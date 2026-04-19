@@ -19,9 +19,9 @@ This file tracks the remaining intentional deviations between the brief and the 
 ## 3. AI backend streaming is provider-streamed when available and backend-chunked otherwise
 
 - Brief expectation: token-by-token or chunked backend streaming.
-- Current state: the AI workstream is intentionally left reserved on this core branch, with placeholder routes preserved so contracts stay stable for the dedicated AI follow-up branch.
-- Reason: this branch is intentionally scoped to the non-AI backend/frontend foundation so AI can land as a separate ownership slice.
-- Resolution status: documented branch-scope deviation.
+- Current state: FastAPI always streams to the frontend; the stub/default provider chunks on the backend, while an OpenAI-compatible LM Studio provider can be swapped in for a model-backed experience.
+- Reason: this guarantees compliant streaming even without a live model endpoint during evaluation while still keeping the provider boundary isolated in one place.
+- Resolution status: accepted implementation choice.
 
 ## 4. PDF and DOCX exports use an async-job flow
 
