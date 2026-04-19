@@ -8,21 +8,26 @@ import path from "node:path";
 import process from "node:process";
 import test from "node:test";
 import { createRequire } from "node:module";
+import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const WebSocket = require("../realtime/node_modules/ws");
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const BACKEND_DIR = path.join(ROOT_DIR, "backend");
+const BACKEND_DIR = path.join(ROOT_DIR, "backend_fastapi");
 const REALTIME_DIR = path.join(ROOT_DIR, "realtime");
 
 function nodeExecutable() {
   return process.execPath;
 }
 
-function createManagedProcess({ cwd, args, env, label }) {
-  const child = spawn(nodeExecutable(), args, {
+function pythonExecutable() {
+  return process.env.PYTHON || "python3";
+}
+
+function createManagedProcess({ cwd, command, args, env, label }) {
+  const child = spawn(command, args, {
     cwd,
     env,
     stdio: ["ignore", "pipe", "pipe"],
@@ -170,9 +175,9 @@ async function waitForJsonMessage(ws, predicate, timeoutMs = 5000) {
   });
 }
 
-async function openWebSocket(url) {
+async function openWebSocket(url, token) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(url, ["collab.realtime.v1", `auth.${token}`]);
     ws.once("open", () => resolve(ws));
     ws.once("error", reject);
   });
@@ -190,26 +195,34 @@ async function closeWebSocket(ws) {
 test("root smoke: backend and realtime wire together for login, documents, sessions, and ws control frames", { timeout: 30000 }, async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "collab-root-smoke-"));
   const databasePath = path.join(tempDir, "app.sqlite");
+  const databaseUrl = `sqlite:///${databasePath}`;
   const backendPort = await getAvailablePort();
   const realtimePort = await getAvailablePort();
   const realtimeSecret = "root_smoke_secret";
+  const jwtSecret = randomBytes(32).toString("hex");
+  const jwtRefreshSecret = randomBytes(32).toString("hex");
+  const smokeUserId = "smoke_user_1";
+  const smokePassword = "demo-pass-123";
 
   const backend = createManagedProcess({
     cwd: BACKEND_DIR,
-    args: ["server.js"],
+    command: pythonExecutable(),
+    args: ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(backendPort)],
     env: {
       ...process.env,
-      PORT: String(backendPort),
-      DATABASE_PATH: databasePath,
+      FASTAPI_DATABASE_URL: databaseUrl,
+      JWT_SECRET_KEY: jwtSecret,
+      JWT_REFRESH_SECRET_KEY: jwtRefreshSecret,
       REALTIME_WS_BASE_URL: `ws://127.0.0.1:${realtimePort}/ws`,
       REALTIME_SHARED_SECRET: realtimeSecret,
-      ALLOW_DEBUG_USER_HEADER: "false",
+      AI_STREAM_PROVIDER: "stub",
     },
     label: "backend",
   });
 
   const realtime = createManagedProcess({
     cwd: REALTIME_DIR,
+    command: nodeExecutable(),
     args: ["src/server.js"],
     env: {
       ...process.env,
@@ -226,14 +239,21 @@ test("root smoke: backend and realtime wire together for login, documents, sessi
     await waitForHttpReady(`http://127.0.0.1:${backendPort}/health`, backend);
     await waitForTcpReady(realtimePort, realtime);
 
+    const registerResponse = await fetch(`http://127.0.0.1:${backendPort}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: smokeUserId, displayName: "Smoke User", password: smokePassword }),
+    });
+    assert.equal(registerResponse.status, 201);
+
     const loginResponse = await fetch(`http://127.0.0.1:${backendPort}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: "user_1" }),
+      body: JSON.stringify({ identifier: smokeUserId, password: smokePassword }),
     });
     assert.equal(loginResponse.status, 200);
     const loginJson = await parseJsonResponse(loginResponse);
-    assert.equal(loginJson.userId, "user_1");
+    assert.equal(loginJson.userId, smokeUserId);
     assert.ok(loginJson.accessToken);
 
     const authHeaders = {
@@ -261,6 +281,35 @@ test("root smoke: backend and realtime wire together for login, documents, sessi
     const getJson = await parseJsonResponse(getResponse);
     assert.equal(getJson.content, "Hello world");
 
+    const aiResponse = await fetch(`http://127.0.0.1:${backendPort}/ai/rewrite/stream`, {
+      method: "POST",
+      headers: authHeaders,
+      body: JSON.stringify({
+        documentId: createJson.documentId,
+        selection: { start: 0, end: 11 },
+        selectedText: "Hello world",
+        contextBefore: "",
+        contextAfter: "",
+        instruction: "Make it more formal",
+        baseVersionId: createJson.currentVersionId,
+      }),
+    });
+    assert.equal(aiResponse.status, 200);
+    const aiText = await aiResponse.text();
+    assert.ok(aiText.includes("event: token"));
+    assert.ok(aiText.includes("event: done"));
+
+    const historyResponse = await fetch(
+      `http://127.0.0.1:${backendPort}/documents/${encodeURIComponent(createJson.documentId)}/ai-history`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${loginJson.accessToken}` },
+      }
+    );
+    assert.equal(historyResponse.status, 200);
+    const historyJson = await parseJsonResponse(historyResponse);
+    assert.equal(historyJson.length, 1);
+
     const sessionResponse = await fetch(`http://127.0.0.1:${backendPort}/sessions`, {
       method: "POST",
       headers: authHeaders,
@@ -270,8 +319,9 @@ test("root smoke: backend and realtime wire together for login, documents, sessi
     const sessionJson = await parseJsonResponse(sessionResponse);
     assert.equal(sessionJson.role, "owner");
     assert.ok(sessionJson.wsUrl.includes(`127.0.0.1:${realtimePort}`));
+    assert.ok(sessionJson.sessionToken);
 
-    ws = await openWebSocket(sessionJson.wsUrl);
+    ws = await openWebSocket(sessionJson.wsUrl, sessionJson.sessionToken);
     const sessionReady = await waitForJsonMessage(ws, (payload) => payload.type === "session_ready");
     assert.equal(sessionReady.documentId, createJson.documentId);
     assert.equal(sessionReady.role, "owner");

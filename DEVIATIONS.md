@@ -1,41 +1,38 @@
 # Assignment 2 Deviations
 
-This document tracks every meaningful deviation between the Assignment 2 brief, the Assignment 1 target
-architecture, and the evolving implementation.
+This file tracks the remaining intentional deviations between the brief and the submitted implementation.
 
-It should be updated throughout Assignment 2 work rather than only at the end.
+## 1. Realtime service remains a separate Node/Yjs relay
 
-## Current Known Deviations
+- Brief expectation: collaboration can be implemented using any suitable realtime transport.
+- Current state: the authoritative backend is FastAPI, but the Yjs/WebSocket relay remains a separate Node service.
+- Reason: the existing relay was already stable and deeply tied to Yjs protocol handling.
+- Resolution status: accepted architectural deviation, documented rather than hidden.
 
-### 1. Backend stack
-- **Brief expectation:** FastAPI backend
-- **Current state:** Repository still contains the Assignment 1 Node/Express backend as the runnable path
-- **Reason:** The team is transitioning from Assignment 1 MVP to Assignment 2 implementation incrementally rather than replacing the backend in one risky step
-- **Planned resolution:** Introduce a dedicated FastAPI backend and migrate contracts/features progressively
+## 2. Rich text is persisted as HTML fragments
 
-### 2. Authentication model
-- **Brief expectation:** registration, securely hashed passwords, JWT access tokens, refresh tokens
-- **Current state:** Delivered MVP currently uses simplified local bearer-token login through `POST /auth/login`
-- **Reason:** Assignment 1 prioritized demonstrable architecture and feasibility over full authentication lifecycle
-- **Planned resolution:** FastAPI backend will own registration, login, refresh, password hashing, and protected route enforcement
+- Brief expectation: a real rich-text editor with formatting support.
+- Current state: the editor is real rich text, and formatted content is persisted as HTML strings in SQLite.
+- Reason: this keeps the persistence and realtime model simple while still delivering visible rich-text behavior.
+- Resolution status: accepted implementation choice.
 
-### 3. AI response delivery
-- **Brief expectation:** token-by-token streaming via SSE, WebSocket, or chunked HTTP response
-- **Current state:** Assignment 1 MVP uses asynchronous AI jobs with polling
-- **Reason:** Polling was simpler and sufficient for Assignment 1, but does not satisfy the Assignment 2 streaming requirement
-- **Planned resolution:** Add real backend streaming and align frontend AI UX with it
+## 3. AI backend streaming is provider-streamed when available and backend-chunked otherwise
 
-### 4. Dashboard data source
-- **Brief expectation:** dashboard listing documents the user owns or has access to
-- **Current state:** frontend groundwork exists, but current dashboard state is not yet backed by a final backend list-documents contract
-- **Reason:** frontend scaffolding landed before the Assignment 2 backend migration
-- **Planned resolution:** add backend-backed dashboard endpoints and replace temporary client-side state
+- Brief expectation: token-by-token or chunked backend streaming.
+- Current state: FastAPI always streams to the frontend; the stub/default provider chunks on the backend, while an OpenAI-compatible provider can still be swapped in.
+- Reason: this guarantees compliant backend streaming even without a live model endpoint during evaluation.
+- Resolution status: accepted implementation choice.
 
-## How To Use This File
+## 4. PDF and DOCX exports are simulated async jobs
 
-For each additional deviation, add:
+- Brief expectation: export support is optional to the core Assignment 2 requirements.
+- Current state: TXT and JSON export immediately, while PDF and DOCX follow an async-job flow with placeholder content rather than full binary rendering.
+- Reason: the coursework emphasis is on architecture, async workflows, and evaluator-visible behavior rather than document-rendering fidelity.
+- Resolution status: temporary simplification, explicitly documented.
 
-- what changed
-- why it changed
-- whether it is an improvement or a temporary compromise
-- what the final intended resolution is
+## 5. Legacy Node backend remains in the repository
+
+- Brief expectation: FastAPI backend.
+- Current state: FastAPI is the runnable Assignment 2 backend, but the earlier Express backend remains in the repo as migration history and as a schema/bootstrap dependency used by the realtime service.
+- Reason: removing it entirely would add risk late in the delivery cycle and offers little grading value.
+- Resolution status: repository-history deviation only; not the submitted runtime path.

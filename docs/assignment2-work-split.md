@@ -1,5 +1,8 @@
 # Assignment 2 Work Split
 
+> Historical planning artifact from the earlier team split.
+> The final implementation is now best understood through `docs/assignment2-current-state.md` and `docs/assignment2-contracts.md`.
+
 This document splits Assignment 2 into four ownership areas so the implementation can move fast while
 keeping GitHub contribution history clean and reviewable.
 

@@ -1,39 +1,56 @@
-# FastAPI Backend (Assignment 2 Work-in-Progress)
+# FastAPI Backend
 
-This directory is the Assignment 2 backend migration target.
+This is the Assignment 2 primary backend.
 
-Goals for this service:
+It provides:
 
-- registration and login with hashed passwords
-- JWT access and refresh token lifecycle
-- protected document routes
-- FastAPI auto-generated docs
-- a clean bridge from the current MVP contracts toward Assignment 2 requirements
+- register, login, refresh, logout, and `/auth/me`
+- protected document CRUD, permissions, share-links, versions, revert, and sessions
+- backend-streamed AI rewrite/summarize/translate
+- AI history, AI policy, AI usage, and export routes
+- real PDF/DOCX export generation plus async export job handling
+- idempotent save, share-link creation, and revert routes
+- FastAPI OpenAPI docs at `/docs`
 
-Current backend foundation slice includes:
-
-- persistent users in SQLite
-- hashed passwords
-- JWT access and refresh token issuance
-- protected dashboard/document routes
-- version history, revert, permissions, and session issuance routes
-- FastAPI auto-generated docs at `/docs`
-
-Realtime authentication model for Assignment 2 foundation:
-
-1. the client authenticates against FastAPI using JWT bearer tokens
-2. the frontend calls `POST /sessions` with the bearer token
-3. the backend validates document access and issues a short-lived signed session token
-4. the realtime service validates that signed token and enforces the current document role for websocket activity
-
-AI note:
-
-- AI streaming and AI history routes are intentionally scaffolded but left unimplemented in this backend slice
-- those routes are reserved for the dedicated AI workstream so they can be committed separately by the AI owner
-
-Run locally (once dependencies are installed):
+## Local Run
 
 ```bash
-cd backend_fastapi
-uvicorn app.main:app --reload --port 8000
+python3 -m pip install -e .
+python3 -m uvicorn app.main:app --reload --port 8000
 ```
+
+## Tests
+
+```bash
+python3 -m pytest -q
+```
+
+## Environment
+
+Copy `backend_fastapi/.env.example` to `backend_fastapi/.env` if you want local overrides.
+
+Important variables:
+
+- `FASTAPI_DATABASE_URL`
+- `JWT_SECRET_KEY`
+- `JWT_REFRESH_SECRET_KEY`
+- `REALTIME_WS_BASE_URL`
+- `REALTIME_SHARED_SECRET`
+- `AI_STREAM_PROVIDER`
+- `AI_PROVIDER_ENDPOINT`
+- `AI_MODEL`
+
+## Realtime Contract
+
+1. The frontend authenticates against FastAPI using JWT bearer tokens.
+2. The frontend calls `POST /sessions`.
+3. FastAPI validates document access and returns a signed short-lived websocket session token plus the base websocket URL.
+4. The frontend sends that signed token during the WebSocket subprotocol handshake.
+5. The realtime service verifies the token and re-checks the document role from the shared SQLite database.
+
+## Security Notes
+
+- passwords are hashed with `pbkdf2_sha256`
+- refresh tokens are hashed before database storage
+- access tokens are tied to the active refresh-token session, so refresh invalidates older access-token sessions immediately
+- auth and session issue routes are rate limited through the shared SQLite database instead of process-local memory

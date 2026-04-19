@@ -10,11 +10,8 @@ case "$MODE" in
   test)
     npm run test:all
     ;;
-  demo)
-    npm run demo:reset
-    ;;
   *)
-    echo "Usage: ./run.sh [current|test|demo]"
+    echo "Usage: ./run.sh [current|test]"
     exit 1
     ;;
 esac

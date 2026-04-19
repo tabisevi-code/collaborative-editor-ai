@@ -1,17 +1,40 @@
 import process from "node:process";
-import path from "node:path";
+import { randomBytes } from "node:crypto";
 
-import { printSection, ROOT_DIR, SERVICE_DEFINITIONS, spawnNpmCommand } from "./utils.mjs";
+import { FASTAPI_DATABASE_PATH, FASTAPI_DATABASE_URL, FASTAPI_DIR, printSection, ROOT_DIR, pythonExecutable, spawnCommand, spawnNpmCommand } from "./utils.mjs";
 
-const DEV_SERVICES = SERVICE_DEFINITIONS.filter((service) =>
-  ["backend", "frontend", "realtime"].includes(service.name)
-);
-const SHARED_DATABASE_PATH = path.join(ROOT_DIR, "backend", "data", "collaborative-editor-ai.sqlite");
-const SHARED_REALTIME_SECRET = process.env.REALTIME_SHARED_SECRET || "collaborative-editor-ai-dev-secret";
+function resolveSecret(value) {
+  return value && value.trim() ? value.trim() : randomBytes(32).toString("hex");
+}
+
+const SHARED_REALTIME_SECRET = resolveSecret(process.env.REALTIME_SHARED_SECRET);
+const JWT_SECRET_KEY = resolveSecret(process.env.JWT_SECRET_KEY);
+const JWT_REFRESH_SECRET_KEY = resolveSecret(process.env.JWT_REFRESH_SECRET_KEY);
 const SHARED_REALTIME_WS_BASE_URL = process.env.REALTIME_WS_BASE_URL || "ws://localhost:3001/ws";
+const FRONTEND_DIR = `${ROOT_DIR}/frontend`;
+const REALTIME_DIR = `${ROOT_DIR}/realtime`;
 
 const children = [];
 let shuttingDown = false;
+
+async function resolveAiProvider() {
+  if (process.env.AI_STREAM_PROVIDER?.trim()) {
+    return process.env.AI_STREAM_PROVIDER.trim();
+  }
+
+  try {
+    const response = await fetch("http://127.0.0.1:1234/v1/models");
+    if (response.ok) {
+      process.stdout.write("[dev-all] detected LM Studio. Using AI_STREAM_PROVIDER=lmstudio\n");
+      return "lmstudio";
+    }
+  } catch {
+    // fall back to stub below
+  }
+
+  process.stdout.write("[dev-all] LM Studio not detected. Using AI_STREAM_PROVIDER=stub\n");
+  return "stub";
+}
 
 function waitForExit(child) {
   if (child.exitCode !== null) {
@@ -47,35 +70,64 @@ function stopAll(exitCode) {
   });
 }
 
-function main() {
-  printSection("Starting backend, realtime, and frontend dev servers");
+async function main() {
+  printSection("Starting FastAPI backend, realtime, and frontend dev servers");
+  const aiProvider = await resolveAiProvider();
 
-  for (const service of DEV_SERVICES) {
-    const serviceEnv = {
-      ...process.env,
-    };
+  const serviceDefinitions = [
+    {
+      name: "backend-fastapi",
+      start() {
+        return spawnCommand({
+          command: pythonExecutable(),
+          cwd: FASTAPI_DIR,
+          label: "backend-fastapi",
+          args: ["-m", "uvicorn", "app.main:app", "--reload", "--port", "8000"],
+          env: {
+            ...process.env,
+            FASTAPI_DATABASE_URL,
+            JWT_SECRET_KEY,
+            JWT_REFRESH_SECRET_KEY,
+            REALTIME_SHARED_SECRET: SHARED_REALTIME_SECRET,
+            REALTIME_WS_BASE_URL: SHARED_REALTIME_WS_BASE_URL,
+            AI_STREAM_PROVIDER: aiProvider,
+          },
+        });
+      },
+    },
+    {
+      name: "realtime",
+      start() {
+        return spawnNpmCommand({
+          cwd: REALTIME_DIR,
+          label: "realtime",
+          args: ["run", "dev"],
+          env: {
+            ...process.env,
+            DATABASE_PATH: FASTAPI_DATABASE_PATH,
+            REALTIME_SHARED_SECRET: SHARED_REALTIME_SECRET,
+          },
+        });
+      },
+    },
+    {
+      name: "frontend",
+      start() {
+        return spawnNpmCommand({
+          cwd: FRONTEND_DIR,
+          label: "frontend",
+          args: ["run", "dev"],
+          env: {
+            ...process.env,
+            VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || "http://localhost:8000",
+          },
+        });
+      },
+    },
+  ];
 
-    if (service.name === "backend") {
-      serviceEnv.DATABASE_PATH = serviceEnv.DATABASE_PATH || SHARED_DATABASE_PATH;
-      serviceEnv.REALTIME_SHARED_SECRET = SHARED_REALTIME_SECRET;
-      serviceEnv.REALTIME_WS_BASE_URL = SHARED_REALTIME_WS_BASE_URL;
-    }
-
-    if (service.name === "realtime") {
-      serviceEnv.DATABASE_PATH = serviceEnv.DATABASE_PATH || SHARED_DATABASE_PATH;
-      serviceEnv.REALTIME_SHARED_SECRET = SHARED_REALTIME_SECRET;
-    }
-
-    if (service.name === "frontend") {
-      serviceEnv.VITE_API_BASE_URL = serviceEnv.VITE_API_BASE_URL || "http://localhost:3000";
-    }
-
-    const child = spawnNpmCommand({
-      cwd: service.cwd,
-      label: service.name,
-      args: ["run", "dev"],
-      env: serviceEnv,
-    });
+  for (const service of serviceDefinitions) {
+    const child = service.start();
 
     child.on("error", (error) => {
       console.error(`[${service.name}] failed to start: ${error.message}`);

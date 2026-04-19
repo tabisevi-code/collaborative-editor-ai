@@ -1,17 +1,18 @@
 services:
-  backend:
+  backend-fastapi:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: backend_fastapi/Dockerfile
     environment:
-      PORT: "3000"
-      DATABASE_PATH: /data/collaborative-editor-ai.sqlite
+      FASTAPI_PORT: "8000"
+      FASTAPI_DATABASE_URL: sqlite:////data/collaborative-editor-ai.sqlite
       REALTIME_WS_BASE_URL: ws://localhost:3001/ws
-      REALTIME_SHARED_SECRET: collaborative-editor-ai-dev-secret
-      AI_PROVIDER: stub
-      ALLOW_DEBUG_USER_HEADER: "true"
+      REALTIME_SHARED_SECRET: ${REALTIME_SHARED_SECRET}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_REFRESH_SECRET_KEY: ${JWT_REFRESH_SECRET_KEY}
+      AI_STREAM_PROVIDER: stub
     ports:
-      - "3000:3000"
+      - "8000:8000"
     volumes:
       - app_data:/data
 
@@ -22,24 +23,24 @@ services:
     environment:
       REALTIME_PORT: "3001"
       DATABASE_PATH: /data/collaborative-editor-ai.sqlite
-      REALTIME_SHARED_SECRET: collaborative-editor-ai-dev-secret
+      REALTIME_SHARED_SECRET: ${REALTIME_SHARED_SECRET}
     ports:
       - "3001:3001"
     volumes:
       - app_data:/data
     depends_on:
-      - backend
+      - backend-fastapi
 
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
     environment:
-      VITE_API_BASE_URL: http://localhost:3000
+      VITE_API_BASE_URL: http://localhost:8000
     ports:
       - "5173:5173"
     depends_on:
-      - backend
+      - backend-fastapi
       - realtime
 
 volumes:
