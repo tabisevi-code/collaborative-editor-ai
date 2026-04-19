@@ -18,7 +18,8 @@ function buildTestEnv() {
 
   return {
     ...process.env,
-    NODE_OPTIONS: [cleanedNodeOptions, `--localstorage-file=${LOCALSTORAGE_FILE}`].filter(Boolean).join(" "),
+    NODE_NO_WARNINGS: "1",
+    NODE_OPTIONS: cleanedNodeOptions,
   };
 }
 
@@ -49,7 +50,7 @@ function runGroup(files, index) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [VITEST_ENTRY, "run", ...files],
+      [`--localstorage-file=${LOCALSTORAGE_FILE}`, VITEST_ENTRY, "run", ...files],
       {
         stdio: "inherit",
         env: buildTestEnv(),
