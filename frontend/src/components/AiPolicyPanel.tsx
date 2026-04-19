@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+
 import type { ApiClient } from "../services/api";
-import { ApiError, type AiPolicyResponse, type DocumentRole } from "../types/api";
+import { ApiError, type AiPolicyResponse, type AiUsageResponse, type DocumentRole } from "../types/api";
 
 interface AiPolicyPanelProps {
   documentId: string;
@@ -22,17 +23,24 @@ function mapAiPolicyError(error: unknown): string {
 
 export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPolicyPanelProps) {
   const [policy, setPolicy] = useState<AiPolicyResponse | null>(null);
+  const [usage, setUsage] = useState<AiUsageResponse | null>(null);
   const [phase, setPhase] = useState<"loading" | "loaded" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   async function loadPolicy() {
     setPhase("loading");
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
-      const nextPolicy = await apiClient.getAiPolicy(documentId, userId);
+      const [nextPolicy, nextUsage] = await Promise.all([
+        apiClient.getAiPolicy(documentId, userId),
+        apiClient.getAiUsage(documentId, userId),
+      ]);
       setPolicy(nextPolicy);
+      setUsage(nextUsage);
       setPhase("loaded");
     } catch (error) {
       setErrorMessage(mapAiPolicyError(error));
@@ -68,6 +76,7 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
 
     setIsSaving(true);
     setErrorMessage(null);
+    setSuccessMessage(null);
 
     try {
       const saved = await apiClient.updateAiPolicy(
@@ -80,6 +89,8 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
         userId
       );
       setPolicy(saved);
+      setUsage(await apiClient.getAiUsage(documentId, userId));
+      setSuccessMessage("AI policy saved.");
     } catch (error) {
       setErrorMessage(mapAiPolicyError(error));
     } finally {
@@ -106,6 +117,13 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
             <div className="status-banner status-error" role="alert">
               <strong>AI policy request failed</strong>
               <p>{errorMessage}</p>
+            </div>
+          )}
+
+          {successMessage && (
+            <div className="status-banner status-success" role="status">
+              <strong>AI policy updated</strong>
+              <p>{successMessage}</p>
             </div>
           )}
 
@@ -162,6 +180,11 @@ export function AiPolicyPanel({ documentId, userId, apiClient, onClose }: AiPoli
                     )
                   }
                 />
+                {usage && (
+                  <p className="field-hint">
+                    Current usage: {usage.usedToday}/{usage.dailyQuota} used today · {usage.remainingToday} remaining
+                  </p>
+                )}
               </div>
             </>
           )}

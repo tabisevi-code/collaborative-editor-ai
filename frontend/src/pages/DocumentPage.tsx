@@ -396,6 +396,16 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
     }
 
     const targetSelection = payload.targetSelection;
+    const currentSourceText = (realtimeDocument.getText() || visibleContent).slice(
+      targetSelection.start,
+      targetSelection.end
+    );
+    if (currentSourceText !== payload.sourceText) {
+      throw new Error(
+        "The selected text changed before the AI result was applied. Re-run AI on the latest text."
+      );
+    }
+
     let nextContent = visibleContent;
 
     if (realtimeDocument.collaborationReady) {
@@ -654,6 +664,10 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
           }
           selectedText={selectedText}
           aiService={aiService}
+          onUseWholeDocument={() => {
+            const activeText = realtimeDocument.getText() || visibleContent;
+            syncSelection({ start: 0, end: activeText.length }, activeText);
+          }}
           onApply={handleAiApply}
           onReject={(jobId) => recordAiFeedback(jobId, "rejected")}
           onClose={() => setShowAiPanel(false)}

@@ -198,6 +198,32 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
     }
   }
 
+  async function requestResponse(path: string, init: RequestInit, userId?: string): Promise<Response> {
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", "application/json");
+
+    try {
+      if (userId?.trim()) {
+        const loginResponse = await login(userId);
+        headers.set("Authorization", `Bearer ${loginResponse.accessToken}`);
+      }
+
+      const response = await fetchImpl(`${resolvedBaseUrl}${path}`, {
+        ...init,
+        headers,
+      });
+
+      if (!response.ok) {
+        const payload = await parseJson(response);
+        throw toApiError(response.status, payload);
+      }
+
+      return response;
+    } catch (error) {
+      throw toUnexpectedError(error);
+    }
+  }
+
   return {
     setSession(session) {
       accessToken = session?.accessToken || null;

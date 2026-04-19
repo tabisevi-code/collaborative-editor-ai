@@ -127,6 +127,17 @@ describe("management panels", () => {
         remainingToday: 3,
         updatedAt: "2026-04-02T00:00:00.000Z",
       })),
+      getAiUsage: vi.fn(async () => ({
+        documentId: "doc_123",
+        aiEnabled: true,
+        dailyQuota: 5,
+        usedToday: 1,
+        remainingToday: 4,
+        allowedRolesForAI: ["owner", "editor"],
+        currentUserRole: "owner",
+        canUseAi: true,
+        updatedAt: "2026-04-02T00:00:00.000Z",
+      })),
       updateAiPolicy: vi.fn(async (documentId, payload) => ({
         documentId,
         ...payload,
