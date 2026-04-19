@@ -4,10 +4,19 @@ import type { ApiClient } from "../services/api";
 import { AiPolicyPanel } from "./AiPolicyPanel";
 import { ExportPanel } from "./ExportPanel";
 import { PermissionsPanel } from "./PermissionsPanel";
+import { VersionHistoryPanel } from "./VersionHistoryPanel";
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    setSession: vi.fn(),
     login: vi.fn(),
+    register: vi.fn(),
+    forgotPassword: vi.fn(),
+    resetPassword: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+    getCurrentUser: vi.fn(),
+    listDocuments: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -15,16 +24,17 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     listPermissions: vi.fn(),
     updatePermission: vi.fn(),
     revokePermission: vi.fn(),
+    listShareLinks: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
+    previewShareLink: vi.fn(),
+    acceptShareLink: vi.fn(),
     getAiPolicy: vi.fn(),
+    getAiUsage: vi.fn(),
     updateAiPolicy: vi.fn(),
     revertToVersion: vi.fn(),
-    requestRewriteJob: vi.fn(),
-    requestSummarizeJob: vi.fn(),
-    requestTranslateJob: vi.fn(),
     startAiStream: vi.fn(),
-    getAiJobStatus: vi.fn(),
     listAiHistory: vi.fn(),
-    getAiUsage: vi.fn(),
     cancelAiJob: vi.fn(),
     recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
@@ -41,6 +51,10 @@ describe("management panels", () => {
       listPermissions: vi.fn(async () => ({
         documentId: "doc_123",
         members: [{ userId: "user_1", role: "owner", updatedAt: "2026-04-02T00:00:00.000Z" }],
+      })),
+      listShareLinks: vi.fn(async () => ({
+        documentId: "doc_123",
+        links: [],
       })),
       updatePermission: vi.fn(async () => ({
         documentId: "doc_123",
@@ -63,6 +77,45 @@ describe("management panels", () => {
     });
   });
 
+  it("creates a share link and surfaces the generated URL", async () => {
+    const apiClient = createApiClientMock({
+      listPermissions: vi.fn(async () => ({
+        documentId: "doc_123",
+        members: [{ userId: "user_1", role: "owner", updatedAt: "2026-04-02T00:00:00.000Z" }],
+      })),
+      listShareLinks: vi.fn(async () => ({
+        documentId: "doc_123",
+        links: [],
+      })),
+      createShareLink: vi.fn(async () => ({
+        linkId: "link_123",
+        role: "viewer",
+        createdAt: "2026-04-02T00:00:00.000Z",
+        expiresAt: "2026-04-03T00:00:00.000Z",
+        revokedAt: null,
+        lastClaimedAt: null,
+        active: true,
+        shareToken: "share_token_123",
+      })),
+    });
+
+    render(
+      <PermissionsPanel documentId="doc_123" userId="user_1" apiClient={apiClient} onClose={vi.fn()} />
+    );
+
+    await screen.findByText("Invite links");
+    fireEvent.click(screen.getByRole("button", { name: /create share link/i }));
+
+    await waitFor(() => {
+      expect(apiClient.createShareLink).toHaveBeenCalledWith(
+        "doc_123",
+        expect.objectContaining({ role: "viewer", expiresInHours: 168, requestId: expect.any(String) }),
+        "user_1"
+      );
+      expect(screen.getByText(/share_token_123/i)).toBeInTheDocument();
+    });
+  });
+
   it("loads and saves AI policy", async () => {
     const apiClient = createApiClientMock({
       getAiPolicy: vi.fn(async () => ({
@@ -70,6 +123,8 @@ describe("management panels", () => {
         aiEnabled: true,
         allowedRolesForAI: ["owner", "editor"],
         dailyQuota: 5,
+        usedToday: 2,
+        remainingToday: 3,
         updatedAt: "2026-04-02T00:00:00.000Z",
       })),
       getAiUsage: vi.fn(async () => ({
@@ -163,5 +218,52 @@ describe("management panels", () => {
     });
 
     clickSpy.mockRestore();
+  });
+
+  it("shows a preview for the selected version", async () => {
+    const apiClient = createApiClientMock({
+      listVersions: vi.fn(async () => ({
+        documentId: "doc_123",
+        versions: [
+          {
+            versionId: "ver_2",
+            versionNumber: 2,
+            createdAt: "2026-04-02T00:05:00.000Z",
+            createdBy: "user_1",
+            reason: "content_update",
+            snapshotContent: "<p>Updated snapshot</p>",
+          },
+          {
+            versionId: "ver_1",
+            versionNumber: 1,
+            createdAt: "2026-04-02T00:00:00.000Z",
+            createdBy: "user_1",
+            reason: "initial_create",
+            snapshotContent: "<p>Original snapshot</p>",
+          },
+        ],
+      })),
+    });
+
+    render(
+      <VersionHistoryPanel
+        documentId="doc_123"
+        userId="user_1"
+        apiClient={apiClient}
+        canRevert
+        onRevert={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(await screen.findByText(/Preview Version 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/Updated snapshot/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/Version 1/i));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Preview Version 1/i)).toBeInTheDocument();
+      expect(screen.getByText(/Original snapshot/i)).toBeInTheDocument();
+    });
   });
 });

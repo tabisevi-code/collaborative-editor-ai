@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, type FormEvent } from "react";
 
 import { StatusBanner } from "../components/StatusBanner";
@@ -14,12 +14,14 @@ function mapRegisterErrorMessage(error: ReturnType<typeof toAuthError>): string 
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { register, authStatus } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const nextPath = new URLSearchParams(location.search).get("next") || "/";
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -36,7 +38,7 @@ export function RegisterPage() {
         identifier,
         password,
       });
-      navigate("/", { replace: true });
+      navigate(nextPath, { replace: true });
     } catch (error) {
       setErrorMessage(mapRegisterErrorMessage(toAuthError(error)));
     }
@@ -48,8 +50,7 @@ export function RegisterPage() {
         <div className="login-brand">Collaborative Editor AI</div>
         <h1>Create account</h1>
         <p>
-          Set up a frontend-ready account flow now. The backend auth contract can be
-          swapped in later without rebuilding this page.
+          Create a real backend account with a hashed password and JWT session.
         </p>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -114,7 +115,7 @@ export function RegisterPage() {
 
         <p className="auth-footer-copy">
           Already have an account?{" "}
-          <Link to="/login" className="auth-link">
+          <Link to={`/login${location.search}`} className="auth-link">
             Sign in
           </Link>
         </p>

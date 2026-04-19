@@ -1,12 +1,15 @@
+.DEFAULT_GOAL := run
+
+.PHONY: install run test fastapi-dev
+
 install:
-	cd backend && npm install
-	cd frontend && npm install || true
+	npm run install:all
+
+run:
+	bash ./run.sh current
 
 test:
-	cd backend && npm test
+	bash ./run.sh test
 
-run-backend:
-	cd backend && npm start
-
-run-frontend:
-	cd frontend && npm start || echo "Frontend not implemented yet"
+fastapi-dev:
+	cd backend_fastapi && python3 -m uvicorn app.main:app --reload --port 8000

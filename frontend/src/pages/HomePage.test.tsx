@@ -7,7 +7,15 @@ import { HomePage } from "./HomePage";
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    setSession: vi.fn(),
     login: vi.fn(),
+    register: vi.fn(),
+    forgotPassword: vi.fn(),
+    resetPassword: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+    getCurrentUser: vi.fn(),
+    listDocuments: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -15,16 +23,17 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     listPermissions: vi.fn(),
     updatePermission: vi.fn(),
     revokePermission: vi.fn(),
+    listShareLinks: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
+    previewShareLink: vi.fn(),
+    acceptShareLink: vi.fn(),
     getAiPolicy: vi.fn(),
+    getAiUsage: vi.fn(),
     updateAiPolicy: vi.fn(),
     revertToVersion: vi.fn(),
-    requestRewriteJob: vi.fn(),
-    requestSummarizeJob: vi.fn(),
-    requestTranslateJob: vi.fn(),
     startAiStream: vi.fn(),
-    getAiJobStatus: vi.fn(),
     listAiHistory: vi.fn(),
-    getAiUsage: vi.fn(),
     cancelAiJob: vi.fn(),
     recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
@@ -47,7 +56,7 @@ function createDashboardServiceMock(overrides: Partial<DashboardService> = {}): 
   };
 }
 
-function renderHomePage(apiClient: ApiClient, dashboardService: DashboardService) {
+function renderHomePage(apiClient: ApiClient, dashboardService: DashboardService, searchQuery = "") {
   return render(
     <MemoryRouter
       initialEntries={["/"]}
@@ -62,6 +71,7 @@ function renderHomePage(apiClient: ApiClient, dashboardService: DashboardService
               dashboardService={dashboardService}
               userId="user_1"
               displayName="User One"
+              searchQuery={searchQuery}
             />
           }
         />
@@ -101,6 +111,35 @@ describe("HomePage", () => {
     expect(screen.getByText("Shared with you")).toBeInTheDocument();
     expect(screen.getByText("Owned Doc")).toBeInTheDocument();
     expect(screen.getByText("Shared Doc")).toBeInTheDocument();
+  });
+
+  it("filters dashboard results using the shared search query", async () => {
+    const apiClient = createApiClientMock();
+    const dashboardService = createDashboardServiceMock({
+      listDocuments: vi.fn(async () => ({
+        owned: [
+          {
+            documentId: "doc_owned",
+            title: "Architecture Notes",
+            role: "owner",
+            updatedAt: "2026-04-02T00:00:00.000Z",
+          },
+        ],
+        shared: [
+          {
+            documentId: "doc_shared",
+            title: "Sprint Retro",
+            role: "editor",
+            updatedAt: "2026-04-02T00:10:00.000Z",
+          },
+        ],
+      })),
+    });
+
+    renderHomePage(apiClient, dashboardService, "retro");
+
+    expect(await screen.findByText("Sprint Retro")).toBeInTheDocument();
+    expect(screen.queryByText("Architecture Notes")).not.toBeInTheDocument();
   });
 
   it("navigates to the document route after a successful create", async () => {

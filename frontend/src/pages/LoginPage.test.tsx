@@ -6,6 +6,7 @@ import { LoginPage } from "./LoginPage";
 
 function createAuthAdapterMock() {
   return {
+    setSession: vi.fn(),
     login: vi.fn(async ({ identifier }: { identifier: string }) => ({
       user: {
         id: identifier,
@@ -19,16 +20,18 @@ function createAuthAdapterMock() {
     refresh: vi.fn(async () => {
       throw new Error("refresh should not be called in this test");
     }),
+    logout: vi.fn(async () => {}),
   };
 }
 
-function renderLoginPage(adapter = createAuthAdapterMock()) {
+function renderLoginPage(adapter = createAuthAdapterMock(), initialEntry = "/login") {
   render(
     <AuthProvider adapter={adapter}>
-      <MemoryRouter initialEntries={["/login"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter initialEntries={[initialEntry]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<div>Dashboard Route</div>} />
+          <Route path="/share/:shareToken" element={<div>Share Route</div>} />
         </Routes>
       </MemoryRouter>
     </AuthProvider>
@@ -65,6 +68,19 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/unexpected authentication error/i)).toBeInTheDocument();
+    });
+  });
+
+  it("respects the next route when signing in from a share link", async () => {
+    const adapter = renderLoginPage(createAuthAdapterMock(), "/login?next=%2Fshare%2Ftoken_123");
+
+    fireEvent.change(screen.getByLabelText(/identifier/i), { target: { value: "user_2" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "secret-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+    await waitFor(() => {
+      expect(adapter.login).toHaveBeenCalled();
+      expect(screen.getByText("Share Route")).toBeInTheDocument();
     });
   });
 });

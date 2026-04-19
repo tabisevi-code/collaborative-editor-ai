@@ -75,12 +75,12 @@ describe("DocHeader", () => {
     const banner = screen.getByRole("banner");
 
     expect(within(banner).queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
-    expect(within(banner).queryByRole("button", { name: "AI Policy" })).not.toBeInTheDocument();
     expect(within(banner).queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
     expect(within(banner).queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(within(banner).queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
 
-    expect(within(banner).getByRole("button", { name: /ai/i })).toBeInTheDocument();
+    expect(within(banner).getByTestId("open-ai-panel")).toBeInTheDocument();
+    expect(within(banner).getByRole("button", { name: "AI Policy" })).toBeInTheDocument();
     expect(within(banner).getByRole("button", { name: "Version history" })).toBeInTheDocument();
     expect(within(banner).getByRole("button", { name: "Open user menu" })).toBeInTheDocument();
   });
