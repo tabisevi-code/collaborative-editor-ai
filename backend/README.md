@@ -1,6 +1,10 @@
 # Backend (SQLite + Auth + RBAC)
 
-This backend is the main REST API for the Collaborative Editor AI project.
+> Historical legacy backend artifact.
+> This Express backend is not the Assignment 2 runtime path.
+> The authoritative Assignment 2 backend is `backend_fastapi/`.
+
+This backend is kept only as migration/reference history for the earlier Node/Express implementation.
 
 For repo-wide install, dev, and test commands, start from the root README:
 

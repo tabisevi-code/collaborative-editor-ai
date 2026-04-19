@@ -1,3 +1,6 @@
+> Historical architecture decision record from earlier design stages.
+> Not authoritative for the final Assignment 2 submission. See `docs/assignment2-contracts.md` for the current delivered API behavior.
+
 ADR-002: API style and long-running operations (async jobs)
 - Status: Accepted (if team agrees)
 - Context:
