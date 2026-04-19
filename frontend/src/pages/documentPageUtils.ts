@@ -54,7 +54,22 @@ export function mapSaveError(error: unknown): { message: string; stale: boolean 
 }
 
 export function wordCount(text: string): number {
-  return text.trim() === "" ? 0 : text.trim().split(/\s+/).length;
+  const plainText = toPlainText(text);
+  return plainText.trim() === "" ? 0 : plainText.trim().split(/\s+/).length;
+}
+
+export function toPlainText(text: string): string {
+  if (!text) {
+    return "";
+  }
+
+  if (typeof document === "undefined") {
+    return text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  const container = document.createElement("div");
+  container.innerHTML = text;
+  return container.textContent || container.innerText || "";
 }
 
 export function toRealtimeStatusLabel(state: RealtimeConnectionState, peerCount: number): string {

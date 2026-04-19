@@ -6,6 +6,7 @@ import { RegisterPage } from "./RegisterPage";
 
 function createAuthAdapterMock() {
   return {
+    setSession: vi.fn(),
     login: vi.fn(),
     register: vi.fn(async ({ identifier, displayName }: { identifier: string; displayName: string }) => ({
       user: {
@@ -19,16 +20,18 @@ function createAuthAdapterMock() {
     refresh: vi.fn(async () => {
       throw new Error("refresh should not be called in this test");
     }),
+    logout: vi.fn(async () => {}),
   };
 }
 
-function renderRegisterPage(adapter = createAuthAdapterMock()) {
+function renderRegisterPage(adapter = createAuthAdapterMock(), initialEntry = "/register") {
   render(
     <AuthProvider adapter={adapter}>
-      <MemoryRouter initialEntries={["/register"]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter initialEntries={[initialEntry]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/" element={<div>Dashboard Route</div>} />
+          <Route path="/share/:shareToken" element={<div>Share Route</div>} />
         </Routes>
       </MemoryRouter>
     </AuthProvider>
@@ -69,6 +72,21 @@ describe("RegisterPage", () => {
         password: "abc123",
       });
       expect(screen.getByText("Dashboard Route")).toBeInTheDocument();
+    });
+  });
+
+  it("respects the next route when registering from a share link", async () => {
+    const adapter = renderRegisterPage(createAuthAdapterMock(), "/register?next=%2Fshare%2Ftoken_123");
+
+    fireEvent.change(screen.getByLabelText(/display name/i), { target: { value: "Ming Ming" } });
+    fireEvent.change(screen.getByLabelText(/identifier/i), { target: { value: "user_4" } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "abc123" } });
+    fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: "abc123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    await waitFor(() => {
+      expect(adapter.register).toHaveBeenCalled();
+      expect(screen.getByText("Share Route")).toBeInTheDocument();
     });
   });
 });
