@@ -1,6 +1,10 @@
 import {
   ApiError,
   type ApiErrorShape,
+  type AiAction,
+  type AiHistoryItemResponse,
+  type AiUsageResponse,
+  type CancelAiJobResponse,
   type AiJobResponse,
   type AiJobFeedbackRequest,
   type AiJobFeedbackResponse,
@@ -19,8 +23,11 @@ import {
   type RevokePermissionResponse,
   type RevertToVersionResponse,
   type RewriteAiJobRequest,
+  type RewriteAiStreamRequest,
   type SummarizeAiJobRequest,
+  type SummarizeAiStreamRequest,
   type TranslateAiJobRequest,
+  type TranslateAiStreamRequest,
   type UpdateAiPolicyRequest,
   type UpdateDocumentRequest,
   type UpdateDocumentResponse,
@@ -57,7 +64,16 @@ export interface ApiClient {
   requestRewriteJob(payload: RewriteAiJobRequest, userId?: string): Promise<AiJobResponse>;
   requestSummarizeJob(payload: SummarizeAiJobRequest, userId?: string): Promise<AiJobResponse>;
   requestTranslateJob(payload: TranslateAiJobRequest, userId?: string): Promise<AiJobResponse>;
+  startAiStream(
+    action: AiAction,
+    payload: RewriteAiStreamRequest | SummarizeAiStreamRequest | TranslateAiStreamRequest,
+    signal?: AbortSignal,
+    userId?: string
+  ): Promise<Response>;
   getAiJobStatus(jobId: string, userId?: string): Promise<AiJobResponse>;
+  listAiHistory(documentId: string, userId?: string): Promise<AiHistoryItemResponse[]>;
+  getAiUsage(documentId: string, userId?: string): Promise<AiUsageResponse>;
+  cancelAiJob(jobId: string, userId?: string): Promise<CancelAiJobResponse>;
   recordAiJobFeedback(jobId: string, payload: AiJobFeedbackRequest, userId?: string): Promise<AiJobFeedbackResponse>;
   createExport(
     documentId: string,
@@ -234,6 +250,32 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
     }
   }
 
+  async function requestResponse(path: string, init: RequestInit, userId?: string): Promise<Response> {
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", "application/json");
+
+    try {
+      if (userId?.trim()) {
+        const loginResponse = await login(userId);
+        headers.set("Authorization", `Bearer ${loginResponse.accessToken}`);
+      }
+
+      const response = await fetchImpl(`${resolvedBaseUrl}${path}`, {
+        ...init,
+        headers,
+      });
+
+      if (!response.ok) {
+        const payload = await parseJson(response);
+        throw toApiError(response.status, payload);
+      }
+
+      return response;
+    } catch (error) {
+      throw toUnexpectedError(error);
+    }
+  }
+
   return {
     login,
     createDocument(payload, userId) {
@@ -376,6 +418,21 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
       };
     },
 
+    startAiStream(action, payload, signal, userId) {
+      return requestResponse(
+        `/ai/${encodeURIComponent(action)}/stream`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+          signal,
+          headers: {
+            Accept: "text/event-stream",
+          },
+        },
+        userId
+      );
+    },
+
     async getAiJobStatus(jobId, userId) {
       const payload = await request<{
         jobId: string;
@@ -400,6 +457,30 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
         createdAt: payload.createdAt,
         updatedAt: payload.updatedAt,
       };
+    },
+
+    listAiHistory(documentId, userId) {
+      return request<AiHistoryItemResponse[]>(
+        `/documents/${encodeURIComponent(documentId)}/ai-history`,
+        { method: "GET" },
+        userId
+      );
+    },
+
+    getAiUsage(documentId, userId) {
+      return request<AiUsageResponse>(
+        `/documents/${encodeURIComponent(documentId)}/ai-usage`,
+        { method: "GET" },
+        userId
+      );
+    },
+
+    cancelAiJob(jobId, userId) {
+      return request<CancelAiJobResponse>(
+        `/ai/jobs/${encodeURIComponent(jobId)}/cancel`,
+        { method: "POST" },
+        userId
+      );
     },
 
     recordAiJobFeedback(jobId, payload, userId) {
