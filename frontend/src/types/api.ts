@@ -155,6 +155,37 @@ export interface TranslateAiJobRequest {
   requestId: string;
 }
 
+export interface RewriteAiStreamRequest {
+  documentId: string;
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  instruction?: string;
+  baseVersionId: string;
+}
+
+export interface SummarizeAiStreamRequest {
+  documentId: string;
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  instruction?: string;
+  baseVersionId: string;
+}
+
+export interface TranslateAiStreamRequest {
+  documentId: string;
+  selection: TextSelection;
+  selectedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+  instruction?: string;
+  targetLanguage: string;
+  baseVersionId: string;
+}
+
 export interface AiJobResponse {
   jobId: string;
   statusUrl: string;
@@ -180,6 +211,43 @@ export interface AiJobFeedbackResponse {
   jobId: string;
   disposition: AiJobFeedbackDisposition;
   recordedAt: string;
+}
+
+export type AiHistoryStatus =
+  | "streaming"
+  | "completed"
+  | "accepted"
+  | "edited"
+  | "rejected"
+  | "cancelled"
+  | "failed";
+
+export interface AiHistoryItemResponse {
+  id: string;
+  documentId: string;
+  action: AiAction;
+  promptLabel: string;
+  outputPreview: string;
+  status: AiHistoryStatus;
+  createdAt: string;
+  jobId: string;
+}
+
+export interface AiUsageResponse {
+  documentId: string;
+  aiEnabled: boolean;
+  dailyQuota: number;
+  usedToday: number;
+  remainingToday: number;
+  allowedRolesForAI: DocumentRole[];
+  currentUserRole: DocumentRole;
+  canUseAi: boolean;
+  updatedAt: string;
+}
+
+export interface CancelAiJobResponse {
+  jobId: string;
+  cancelled: boolean;
 }
 
 export type ExportFormat = "txt" | "json" | "pdf" | "docx";
