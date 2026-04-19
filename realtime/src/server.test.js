@@ -14,6 +14,7 @@ const decoding = require("lib0/decoding");
 const { initializeSchema } = require("../../backend/src/db/schema");
 const { signSessionToken } = require("../../shared/sessionToken");
 const { createRealtimeServer } = require("./server");
+const { REALTIME_PROTOCOL } = require("./ws/auth");
 
 const MESSAGE_SYNC = 0;
 
@@ -31,9 +32,9 @@ function encodeSyncUpdate(update) {
   return encoding.toUint8Array(encoder);
 }
 
-function openSocket(url) {
+function openSocket(url, token) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(url, [REALTIME_PROTOCOL, `auth.${token}`]);
     const handleError = (error) => reject(error);
     ws.once("error", handleError);
     ws.once("open", () => {
@@ -141,6 +142,34 @@ function waitForText(client, expected, timeoutMs = 1500) {
   });
 }
 
+function waitForCondition(check, timeoutMs = 1500, intervalMs = 10) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+
+    function poll() {
+      try {
+        const result = check();
+        if (result) {
+          resolve(result);
+          return;
+        }
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      if (Date.now() - start >= timeoutMs) {
+        reject(new Error("timed out waiting for condition"));
+        return;
+      }
+
+      setTimeout(poll, intervalMs);
+    }
+
+    poll();
+  });
+}
+
 function createFixture() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "collab-rt-"));
   const databasePath = path.join(tempDir, "app.sqlite");
@@ -148,6 +177,16 @@ function createFixture() {
   initializeSchema(db);
 
   const now = new Date().toISOString();
+  const insertUser = db.prepare(
+    `
+      INSERT INTO users (user_id, display_name, global_role, access_token, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `
+  );
+  insertUser.run("user_1", "User One", "user", "token_user_1", now, now);
+  insertUser.run("user_2", "User Two", "user", "token_user_2", now, now);
+  insertUser.run("admin_1", "Admin One", "admin", "token_admin_1", now, now);
+
   db.prepare(
     `
       INSERT INTO documents (
@@ -216,7 +255,7 @@ test("authenticated clients receive seeded document content", async () => {
 
   try {
     const token = createToken(fixture.secret, "user_2", "editor");
-    const ws = await openSocket(`ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(token)}`);
+    const ws = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, token);
     const client = attachYjsClient(ws);
 
     await waitForText(client, "Seed body");
@@ -255,12 +294,8 @@ test("editor updates converge across two connected clients", async () => {
   const fixture = createFixture();
 
   try {
-    const wsA = await openSocket(
-      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_1", "owner"))}`
-    );
-    const wsB = await openSocket(
-      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_2", "editor"))}`
-    );
+    const wsA = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_1", "owner"));
+    const wsB = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_2", "editor"));
 
     const clientA = attachYjsClient(wsA);
     const clientB = attachYjsClient(wsB);
@@ -286,13 +321,96 @@ test("editor updates converge across two connected clients", async () => {
   }
 });
 
+test("simultaneous typing at the same position converges deterministically across clients", async () => {
+  const fixture = createFixture();
+
+  try {
+    const wsA = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_1", "owner"));
+    const wsB = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_2", "editor"));
+
+    const clientA = attachYjsClient(wsA);
+    const clientB = attachYjsClient(wsB);
+    await Promise.all([waitForText(clientA, "Seed body"), waitForText(clientB, "Seed body")]);
+
+    // Simulate concurrent local edits before either client sends its update.
+    clientA.doc.transact(() => {
+      clientA.text.insert(0, "A-");
+    }, "simultaneous-a");
+
+    clientB.doc.transact(() => {
+      clientB.text.insert(0, "B-");
+    }, "simultaneous-b");
+
+    wsA.send(Buffer.from(encodeSyncUpdate(Y.encodeStateAsUpdate(clientA.doc))));
+    wsB.send(Buffer.from(encodeSyncUpdate(Y.encodeStateAsUpdate(clientB.doc))));
+
+    const finalText = await waitForCondition(() => {
+      const nextA = clientA.text.toString();
+      const nextB = clientB.text.toString();
+      if (nextA !== nextB) {
+        return null;
+      }
+      if (!nextA.includes("A-") || !nextA.includes("B-") || !nextA.endsWith("Seed body")) {
+        return null;
+      }
+      return nextA;
+    });
+
+    assert.equal(clientA.text.toString(), clientB.text.toString());
+    assert.equal(finalText.length, "Seed body".length + 4);
+    assert.match(finalText, /^(A-B-|B-A-)Seed body$/);
+
+    await closeSocket(wsA);
+    await closeSocket(wsB);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("overlapping delete and insert operations still converge across clients", async () => {
+  const fixture = createFixture();
+
+  try {
+    const wsA = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_1", "owner"));
+    const wsB = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_2", "editor"));
+
+    const clientA = attachYjsClient(wsA);
+    const clientB = attachYjsClient(wsB);
+    await Promise.all([waitForText(clientA, "Seed body"), waitForText(clientB, "Seed body")]);
+
+    clientA.doc.transact(() => {
+      clientA.text.delete(0, 5);
+    }, "overlap-delete");
+
+    clientB.doc.transact(() => {
+      clientB.text.insert(0, "Brave ");
+    }, "overlap-insert");
+
+    const referenceDoc = new Y.Doc();
+    Y.applyUpdate(referenceDoc, Y.encodeStateAsUpdate(clientA.doc));
+    Y.applyUpdate(referenceDoc, Y.encodeStateAsUpdate(clientB.doc));
+    const expected = referenceDoc.getText("content").toString();
+
+    wsA.send(Buffer.from(encodeSyncUpdate(Y.encodeStateAsUpdate(clientA.doc))));
+    wsB.send(Buffer.from(encodeSyncUpdate(Y.encodeStateAsUpdate(clientB.doc))));
+
+    await Promise.all([waitForText(clientA, expected), waitForText(clientB, expected)]);
+    assert.equal(clientA.text.toString(), expected);
+    assert.equal(clientB.text.toString(), expected);
+    assert.match(expected, /^Brave body$/);
+
+    await closeSocket(wsA);
+    await closeSocket(wsB);
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("viewer updates are rejected while the socket stays connected", async () => {
   const fixture = createFixture();
 
   try {
-    const ws = await openSocket(
-      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "admin_1", "viewer"))}`
-    );
+    const ws = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "admin_1", "viewer"));
     const client = attachYjsClient(ws);
     await waitForText(client, "Seed body");
 
@@ -314,9 +432,7 @@ test("document_reverted events reset the shared Yjs content", async () => {
   const fixture = createFixture();
 
   try {
-    const ws = await openSocket(
-      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_2", "editor"))}`
-    );
+    const ws = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_2", "editor"));
     const client = attachYjsClient(ws);
     await waitForText(client, "Seed body");
 
@@ -355,12 +471,8 @@ test("clients continue converging after a document_reverted event", async () => 
   const fixture = createFixture();
 
   try {
-    const wsA = await openSocket(
-      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_1", "owner"))}`
-    );
-    const wsB = await openSocket(
-      `ws://127.0.0.1:${fixture.server.port}?token=${encodeURIComponent(createToken(fixture.secret, "user_2", "editor"))}`
-    );
+    const wsA = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_1", "owner"));
+    const wsB = await openSocket(`ws://127.0.0.1:${fixture.server.port}`, createToken(fixture.secret, "user_2", "editor"));
 
     const clientA = attachYjsClient(wsA);
     const clientB = attachYjsClient(wsB);
