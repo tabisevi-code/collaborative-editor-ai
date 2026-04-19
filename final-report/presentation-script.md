@@ -1,5 +1,8 @@
 # AI1220 Assignment 1 Presentation Script
 
+> Historical Assignment 1 artifact.
+> The current runnable Assignment 2 system is documented through the root `README.md`, `DEMO.md`, `docs/assignment2-current-state.md`, and `docs/assignment2-contracts.md`.
+
 This script is designed for a recorded video of about 10 minutes and follows the instructor's required order:
 
 1. Team responsibilities and contributions
@@ -16,7 +19,7 @@ To reduce switching during recording, each member appears once in one contiguous
 - Keep the app already running from:
 
 ```bash
-npm run demo:reset
+npm run dev:all
 ```
 
 - Use a fresh document after reset.

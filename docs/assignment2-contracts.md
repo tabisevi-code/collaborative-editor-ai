@@ -1,18 +1,12 @@
 # Assignment 2 Contracts
 
-This document freezes the core Assignment 2 contracts before full implementation so frontend, backend,
-AI, and realtime work can evolve without drifting.
+This file reflects the final implemented Assignment 2 contracts.
 
-It is intentionally concrete and implementation-facing.
+## Auth
 
-## 1. Authentication Contracts
+### `POST /auth/register`
 
-### POST /auth/register
-
-Purpose:
-- Create a new user account with a securely hashed password.
-
-Request JSON:
+Request:
 
 ```json
 {
@@ -22,28 +16,21 @@ Request JSON:
 }
 ```
 
-Success response (201):
+Response: `201`
 
 ```json
 {
   "userId": "user_1",
   "displayName": "User One",
-  "accessToken": "<jwt-access-token>",
-  "refreshToken": "<jwt-refresh-token>",
+  "accessToken": "<jwt>",
+  "refreshToken": "<jwt>",
   "expiresIn": 1200
 }
 ```
 
-Common errors:
-- `400 INVALID_INPUT`
-- `409 CONFLICT`
+### `POST /auth/login`
 
-### POST /auth/login
-
-Purpose:
-- Authenticate a user and issue a short-lived access token plus refresh token.
-
-Request JSON:
+Request:
 
 ```json
 {
@@ -52,95 +39,106 @@ Request JSON:
 }
 ```
 
-Success response (200):
+Response: `200`, same shape as register.
+
+### `POST /auth/refresh`
+
+Request:
+
+```json
+{
+  "refreshToken": "<jwt>"
+}
+```
+
+Response: `200`, same shape as login.
+
+### `GET /auth/me`
+
+Response:
 
 ```json
 {
   "userId": "user_1",
-  "displayName": "User One",
-  "accessToken": "<jwt-access-token>",
-  "refreshToken": "<jwt-refresh-token>",
-  "expiresIn": 1200
+  "displayName": "User One"
 }
 ```
 
-Common errors:
-- `401 AUTH_FAILED`
-- `400 INVALID_INPUT`
+### `POST /auth/logout`
 
-### POST /auth/refresh
-
-Purpose:
-- Exchange a refresh token for a new access token and optionally a new refresh token.
-
-Request JSON:
+Request:
 
 ```json
 {
-  "refreshToken": "<jwt-refresh-token>"
+  "refreshToken": "<jwt>"
 }
 ```
 
-Success response (200):
+Response:
 
 ```json
 {
-  "userId": "user_1",
-  "displayName": "User One",
-  "accessToken": "<new-jwt-access-token>",
-  "refreshToken": "<new-jwt-refresh-token>",
-  "expiresIn": 1200
+  "revoked": true
 }
 ```
 
-Common errors:
-- `401 AUTH_EXPIRED`
-- `401 AUTH_FAILED`
+### `POST /auth/forgot-password`
 
-## 2. Document Contracts
-
-### GET /documents
-
-Purpose:
-- Return dashboard data for owned and shared documents.
-
-Success response (200):
+Request:
 
 ```json
 {
-  "owned": [
-    {
-      "documentId": "doc_123",
-      "title": "Project brief",
-      "role": "owner",
-      "updatedAt": "2026-04-05T12:00:00.000Z",
-      "ownerDisplayName": "User One"
-    }
-  ],
-  "shared": [
-    {
-      "documentId": "doc_456",
-      "title": "Meeting notes",
-      "role": "editor",
-      "updatedAt": "2026-04-05T13:00:00.000Z",
-      "ownerDisplayName": "User Two"
-    }
-  ]
+  "identifier": "user_1"
 }
 ```
 
-### POST /documents
-
-Request JSON:
+Response:
 
 ```json
 {
-  "title": "Untitled document",
-  "content": ""
+  "accepted": true,
+  "message": "If the account exists, a one-time reset token has been issued for this local environment.",
+  "resetToken": "opaque_local_reset_token",
+  "expiresAt": "2026-04-30T12:15:00.000Z"
 }
 ```
 
-Success response (201):
+### `POST /auth/reset-password`
+
+Request:
+
+```json
+{
+  "identifier": "user_1",
+  "resetToken": "opaque_local_reset_token",
+  "newPassword": "new-pass-123"
+}
+```
+
+Response:
+
+```json
+{
+  "reset": true
+}
+```
+
+## Documents
+
+### `GET /documents`
+
+Response:
+
+```json
+{
+  "owned": [],
+  "shared": []
+}
+```
+
+### `POST /documents`
+
+Response: `201`
 
 ```json
 {
@@ -153,15 +151,13 @@ Success response (201):
 }
 ```
 
-### GET /documents/:documentId
-
-Success response (200):
+### `GET /documents/:documentId`
 
 ```json
 {
   "documentId": "doc_123",
   "title": "Project brief",
-  "content": "Latest saved content",
+  "content": "<p>Latest saved content</p>",
   "updatedAt": "2026-04-05T12:20:00.000Z",
   "currentVersionId": "ver_4",
   "role": "editor",
@@ -169,36 +165,22 @@ Success response (200):
 }
 ```
 
-### PUT /documents/:documentId/content
-
-Request JSON:
+### `PUT /documents/:documentId/content`
 
 ```json
 {
   "requestId": "req_save_001",
-  "content": "Updated document content",
-  "baseRevisionId": "rev_4"
+  "content": "<p>Updated document content</p>",
+  "baseRevisionId": "rev_4",
+  "updateReason": "content_update"
 }
 ```
 
-Success response (200):
+This route is idempotent per authenticated user and `requestId`. Repeating the same request with the same `requestId` returns the original response instead of creating a second save version.
 
-```json
-{
-  "documentId": "doc_123",
-  "updatedAt": "2026-04-05T12:21:00.000Z",
-  "revisionId": "rev_5"
-}
-```
+## Realtime
 
-## 3. Realtime Session Contract
-
-### POST /sessions
-
-Purpose:
-- Create an authenticated collaboration session for the realtime service.
-
-Request JSON:
+### `POST /sessions`
 
 ```json
 {
@@ -206,53 +188,115 @@ Request JSON:
 }
 ```
 
-Success response (200):
-
 ```json
 {
   "sessionId": "sess_123",
-  "wsUrl": "ws://localhost:3001/ws?token=<signed-session-token>",
+  "wsUrl": "ws://localhost:3001/ws",
+  "sessionToken": "<signed-session-token>",
   "role": "editor"
 }
 ```
 
-### WebSocket auth model
+The frontend opens the websocket using the signed `sessionToken` as a WebSocket subprotocol, not as a query-string token.
 
-- REST APIs use JWT bearer tokens.
-- The frontend uses JWT auth to call `POST /sessions`.
-- The backend validates the JWT and document permission before issuing the realtime session.
-- The returned `wsUrl` contains a short-lived signed session token.
-- The realtime service validates that session token and re-checks document role before allowing the session.
+Access tokens are tied to the active refresh-token session, so a refresh invalidates older access-token sessions immediately.
 
-## 4. AI Streaming Contract
+## Share Links
 
-### POST /ai/rewrite/stream
+### `POST /documents/:documentId/share-links`
 
-Purpose:
-- Start a streaming rewrite request for selected text.
+```json
+{
+  "role": "editor",
+  "expiresInHours": 168,
+  "requestId": "req_share_001"
+}
+```
 
-Request JSON:
+```json
+{
+  "linkId": "link_123",
+  "role": "editor",
+  "createdAt": "2026-04-05T12:00:00.000Z",
+  "expiresAt": "2026-04-12T12:00:00.000Z",
+  "revokedAt": null,
+  "lastClaimedAt": null,
+  "active": true,
+  "shareToken": "opaque_share_token"
+}
+```
+
+### `GET /documents/:documentId/share-links`
 
 ```json
 {
   "documentId": "doc_123",
-  "selection": { "start": 0, "end": 42 },
-  "selectedText": "Original selected text",
-  "contextBefore": "",
-  "contextAfter": "remaining content",
-  "instruction": "Make this more concise",
-  "baseVersionId": "ver_4"
+  "links": [
+    {
+      "linkId": "link_123",
+      "role": "editor",
+      "createdAt": "2026-04-05T12:00:00.000Z",
+      "expiresAt": "2026-04-12T12:00:00.000Z",
+      "revokedAt": null,
+      "lastClaimedAt": null,
+      "active": true
+    }
+  ]
 }
 ```
 
-Streaming response event model (SSE-style conceptual shape):
+### `GET /share-links/:token`
+
+```json
+{
+  "documentId": "doc_123",
+  "documentTitle": "Project brief",
+  "role": "editor",
+  "expiresAt": "2026-04-12T12:00:00.000Z",
+  "ownerDisplayName": "User One"
+}
+```
+
+### `POST /share-links/:token/accept`
+
+```json
+{
+  "documentId": "doc_123",
+  "role": "editor",
+  "accepted": true
+}
+```
+
+### `DELETE /documents/:documentId/share-links/:linkId?revokeAccess=true`
+
+```json
+{
+  "linkId": "link_123",
+  "role": "editor",
+  "createdAt": "2026-04-05T12:00:00.000Z",
+  "expiresAt": "2026-04-12T12:00:00.000Z",
+  "revokedAt": "2026-04-06T08:00:00.000Z",
+  "lastClaimedAt": "2026-04-05T12:30:00.000Z",
+  "active": false,
+  "revokedAccessCount": 1
+}
+```
+
+## AI Streaming
+
+### `POST /ai/rewrite/stream`
+
+### `POST /ai/summarize/stream`
+
+### `POST /ai/translate/stream`
+
+All three endpoints return `text/event-stream` responses.
+
+Event format:
 
 ```text
 event: token
-data: {"text":"Some"}
-
-event: token
-data: {"text":" streamed"}
+data: {"jobId":"aijob_123","text":"Some"}
 
 event: done
 data: {"jobId":"aijob_123","fullText":"Some streamed result"}
@@ -262,26 +306,36 @@ Error event:
 
 ```text
 event: error
-data: {"code":"AI_FAILED","message":"Provider request failed"}
+data: {"jobId":"aijob_123","code":"AI_FAILED","message":"Provider request failed"}
 ```
 
-### Cancel contract
-
-Option A:
-- client closes the stream connection
-
-Option B:
-- separate cancel endpoint:
+### `POST /ai/jobs/:jobId/cancel`
 
 ```json
-POST /ai/jobs/:jobId/cancel
+{
+  "jobId": "aijob_123",
+  "cancelled": true
+}
 ```
 
-## 5. AI History Contract
+### `POST /ai/jobs/:jobId/feedback`
 
-### GET /documents/:documentId/ai-history
+```json
+{
+  "disposition": "applied_full",
+  "appliedText": "Edited output",
+  "appliedRange": { "start": 0, "end": 12 }
+}
+```
 
-Success response (200):
+Client-side apply rule:
+
+- AI results are applied only if the current text inside the target range still matches the source text that the suggestion was generated from.
+- If another collaborator changed that source text first, the apply is blocked and the user must re-run AI on the latest text.
+
+## AI History
+
+### `GET /documents/:documentId/ai-history`
 
 ```json
 [
@@ -290,7 +344,7 @@ Success response (200):
     "documentId": "doc_123",
     "action": "rewrite",
     "promptLabel": "Make this more concise",
-    "outputPreview": "Shortened version of the text",
+    "outputPreview": "Shortened version",
     "status": "accepted",
     "createdAt": "2026-04-05T12:25:00.000Z",
     "jobId": "aijob_123"
@@ -298,9 +352,24 @@ Success response (200):
 ]
 ```
 
-## 6. Standard Error Schema
+### `GET /documents/:documentId/ai-usage`
 
-All non-2xx responses should follow:
+```json
+{
+  "documentId": "doc_123",
+  "aiEnabled": true,
+  "dailyQuota": 5,
+  "usedToday": 1,
+  "remainingToday": 4,
+  "allowedRolesForAI": ["owner", "editor"],
+  "currentUserRole": "editor",
+  "canUseAi": true
+}
+```
+
+## Standard Error Schema
+
+All non-2xx responses use:
 
 ```json
 {

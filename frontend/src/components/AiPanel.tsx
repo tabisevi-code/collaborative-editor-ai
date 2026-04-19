@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { AiAction } from "../types/api";
+import type { AiAction, AiUsageResponse } from "../types/api";
 import type { AiHistoryItem, AiSelectionSnapshot, AiService } from "../services/ai";
 import { ApiError } from "../types/api";
 
@@ -9,6 +9,7 @@ export interface AiApplyPayload {
   mode: "full" | "partial";
   jobId: string | null;
   targetSelection: AiSelectionSnapshot["selection"];
+  sourceText: string;
   edited: boolean;
 }
 
@@ -17,6 +18,7 @@ interface AiPanelProps {
   snapshot: AiSelectionSnapshot;
   selectedText: string;
   aiService: AiService;
+  onUseWholeDocument?(): void;
   onApply(payload: AiApplyPayload): Promise<void> | void;
   onReject(jobId: string | null): Promise<void> | void;
   onClose(): void;
@@ -52,9 +54,10 @@ function formatJobStatus(phase: AiPanelPhase): string {
   return "Ready to run";
 }
 
-export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply, onReject, onClose }: AiPanelProps) {
+export function AiPanel({ documentId, snapshot, selectedText, aiService, onUseWholeDocument, onApply, onReject, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
+  const [instruction, setInstruction] = useState("Make this clearer and more concise.");
   const [phase, setPhase] = useState<AiPanelPhase>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -62,6 +65,8 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
   const [generatedSuggestion, setGeneratedSuggestion] = useState("");
   const [suggestionSelection, setSuggestionSelection] = useState<{ start: number; end: number } | null>(null);
   const [historyItems, setHistoryItems] = useState<AiHistoryItem[]>([]);
+  const [usage, setUsage] = useState<AiUsageResponse | null>(null);
+  const [runSnapshot, setRunSnapshot] = useState<AiSelectionSnapshot | null>(null);
   const suggestionRef = useRef<HTMLTextAreaElement | null>(null);
   const activeSessionRef = useRef<{ cancel(): void } | null>(null);
 
@@ -70,8 +75,13 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
     setHistoryItems(items);
   }
 
+  async function loadUsage() {
+    const nextUsage = await aiService.getUsage(documentId);
+    setUsage(nextUsage);
+  }
+
   useEffect(() => {
-    void loadHistory();
+    void Promise.all([loadHistory(), loadUsage()]);
   }, [aiService, documentId]);
 
   useEffect(() => {
@@ -90,6 +100,7 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
     setEditableSuggestion("");
     setGeneratedSuggestion("");
     setSuggestionSelection(null);
+    setRunSnapshot(snapshot);
 
     try {
       const session = await aiService.startStream({
@@ -97,12 +108,17 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
         ...snapshot,
         action,
         targetLanguage,
+        instruction,
       });
       activeSessionRef.current = session;
       setJobId(session.jobId);
 
       let finalText = "";
       for await (const chunk of session.stream) {
+        if (chunk.jobId && !jobId) {
+          setJobId(chunk.jobId);
+        }
+
         if (chunk.type === "token") {
           finalText += chunk.text || "";
           setEditableSuggestion(finalText);
@@ -112,7 +128,7 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
         if (chunk.type === "error") {
           setErrorMessage(chunk.errorMessage || "AI generation failed.");
           setPhase("error");
-          await loadHistory();
+          await Promise.all([loadHistory(), loadUsage()]);
           return;
         }
 
@@ -121,13 +137,13 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
           setGeneratedSuggestion(completedText);
           setEditableSuggestion(completedText);
           setPhase("completed");
-          await loadHistory();
+          await Promise.all([loadHistory(), loadUsage()]);
           return;
         }
       }
 
       setPhase("cancelled");
-      await loadHistory();
+      await Promise.all([loadHistory(), loadUsage()]);
     } catch (error) {
       setErrorMessage(mapAiError(error));
       setPhase("error");
@@ -135,6 +151,7 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
   }
 
   async function handleApply(mode: "full" | "partial") {
+    const applySnapshot = runSnapshot ?? snapshot;
     const nextText =
       mode === "partial" && suggestionSelection && suggestionSelection.end > suggestionSelection.start
         ? editableSuggestion.slice(suggestionSelection.start, suggestionSelection.end)
@@ -146,19 +163,25 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
       return;
     }
 
-    await onApply({
-      text: nextText,
-      mode,
-      jobId,
-      targetSelection: snapshot.selection,
-      edited: editableSuggestion !== generatedSuggestion,
-    });
-    onClose();
+    try {
+      await onApply({
+        text: nextText,
+        mode,
+        jobId,
+        targetSelection: applySnapshot.selection,
+        sourceText: applySnapshot.selectedText,
+        edited: editableSuggestion !== generatedSuggestion,
+      });
+      onClose();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not apply AI result.");
+      setPhase("error");
+    }
   }
 
   async function handleReject() {
     await onReject(jobId);
-    await loadHistory();
+    await Promise.all([loadHistory(), loadUsage()]);
     onClose();
   }
 
@@ -171,11 +194,19 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
   const hasPartialSelection = Boolean(
     suggestionSelection && suggestionSelection.end > suggestionSelection.start && editableSuggestion.length > 0
   );
+  const previewSelectionText = phase === "completed" && runSnapshot ? runSnapshot.selectedText : selectedText;
+  const selectionLength = snapshot.selection.end > snapshot.selection.start ? snapshot.selection.end - snapshot.selection.start : 0;
+
+  const instructionLabel = action === "translate" ? "Translation notes" : action === "summarize" ? "Summary instruction" : "Rewrite instruction";
+  const instructionPlaceholder = action === "translate"
+    ? "Optional notes like formal tone, keep names unchanged, or use simple wording"
+    : action === "summarize"
+      ? "Optional notes like keep it to one sentence or use bullet points"
+      : "Describe how the text should be rewritten";
 
   return (
     <>
-      <div className="side-panel-overlay" onClick={onClose} />
-      <aside className="side-panel">
+      <aside className="side-panel side-panel-nonmodal" data-testid="ai-panel">
         <div className="side-panel-header">
           <h3>
             <span>✨</span>
@@ -193,6 +224,7 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
               {ACTIONS.map((item) => (
                 <button
                   key={item.value}
+                  data-testid={`ai-action-${item.value}`}
                   className={`ai-tab${action === item.value ? " active" : ""}`}
                   onClick={() => {
                     setAction(item.value);
@@ -212,9 +244,10 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
           {action === "translate" && (
             <div className="field">
               <label className="field-label" htmlFor="target-lang">Target language</label>
-              <select
-                id="target-lang"
-                className="text-input"
+                <select
+                  id="target-lang"
+                  data-testid="ai-target-language"
+                  className="text-input"
                 value={targetLanguage}
                 onChange={(event) => setTargetLanguage(event.target.value)}
               >
@@ -226,25 +259,55 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
           )}
 
           <div className="field">
-            <p className="field-label">Selected text</p>
-            {selectedText.trim() ? (
-              <div className="ai-selection-preview">{selectedText}</div>
-            ) : (
-              <p className="field-hint" style={{ fontStyle: "italic" }}>
-                No text selected. Select text in the editor before using AI.
-              </p>
-            )}
+            <label className="field-label" htmlFor="ai-instruction">{instructionLabel}</label>
+            <textarea
+              id="ai-instruction"
+              className="text-input"
+              style={{ minHeight: 84, resize: "vertical" }}
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              placeholder={instructionPlaceholder}
+            />
           </div>
 
-          <div className="field ai-job-status-card">
+          <div className="field">
+            <p className="field-label">Selected text</p>
+            {previewSelectionText.trim() ? (
+              <div className="ai-selection-preview">{previewSelectionText}</div>
+            ) : (
+              <p className="field-hint" style={{ fontStyle: "italic" }}>
+                No text selected. Select text in the editor or switch to the whole document.
+              </p>
+            )}
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
+              <span className="field-hint">
+                Current range: {selectionLength > 0 ? `${selectionLength} characters selected` : "no active selection"}
+              </span>
+              {onUseWholeDocument && (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={onUseWholeDocument}>
+                  Use whole document
+                </button>
+              )}
+            </div>
+            <p className="field-hint">
+              This panel stays open while you edit. Highlight a different range in the document, then run AI again.
+            </p>
+          </div>
+
+            <div className="field ai-job-status-card">
             <p className="field-label">Job status</p>
             <div className="ai-job-status-row">
               <strong>{formatJobStatus(phase)}</strong>
               {jobId && <span className="field-hint">{jobId}</span>}
             </div>
-            {phase === "streaming" && (
+          {phase === "streaming" && (
+                <p className="field-hint">
+                 Rendering the backend stream token by token.
+                </p>
+              )}
+            {usage && (
               <p className="field-hint">
-                Rendering the draft token by token through the streaming adapter.
+                Daily quota: {usage.usedToday}/{usage.dailyQuota} used today · {usage.remainingToday} remaining
               </p>
             )}
             {phase === "cancelled" && (
@@ -265,12 +328,13 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
             <div className="field ai-review-grid">
               <div>
                 <p className="field-label">Before</p>
-                <div className="ai-selection-preview">{selectedText}</div>
+                <div className="ai-selection-preview">{runSnapshot?.selectedText || previewSelectionText}</div>
               </div>
               <div>
                 <p className="field-label">After</p>
                 <textarea
                   ref={suggestionRef}
+                  data-testid="ai-suggestion-editor"
                   className="ai-result-box ai-result-editor"
                   value={editableSuggestion}
                   onChange={(event) => setEditableSuggestion(event.target.value)}
@@ -326,17 +390,18 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
         <div className="side-panel-footer">
           {phase === "completed" ? (
             <>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => void handleApply("full")}>
+              <button className="btn btn-primary" data-testid="ai-apply-all" style={{ flex: 1 }} onClick={() => void handleApply("full")}>
                 Apply all
               </button>
               <button
                 className="btn btn-secondary"
+                data-testid="ai-apply-selection"
                 onClick={() => void handleApply("partial")}
                 disabled={!hasPartialSelection}
               >
                 Apply selection
               </button>
-              <button className="btn btn-secondary" onClick={() => void handleReject()}>
+              <button className="btn btn-secondary" data-testid="ai-reject" onClick={() => void handleReject()}>
                 Reject
               </button>
             </>
@@ -345,13 +410,13 @@ export function AiPanel({ documentId, snapshot, selectedText, aiService, onApply
               <button className="btn btn-ai" style={{ flex: 1 }} disabled>
                 Streaming...
               </button>
-              <button className="btn btn-secondary" onClick={handleCancel}>
+              <button className="btn btn-secondary" data-testid="ai-cancel" onClick={handleCancel}>
                 Cancel stream
               </button>
             </>
           ) : (
             <>
-              <button className="btn btn-ai" style={{ flex: 1 }} onClick={handleRun} disabled={!canRun}>
+              <button className="btn btn-ai" data-testid="ai-run" style={{ flex: 1 }} onClick={handleRun} disabled={!canRun || (usage ? !usage.canUseAi : false)}>
                 Run AI
               </button>
               <button className="btn btn-secondary" onClick={onClose}>

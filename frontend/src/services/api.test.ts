@@ -2,19 +2,8 @@ import { createApiClient } from "./api";
 import { ApiError } from "../types/api";
 
 describe("api client", () => {
-  it("logs in and sends Authorization on createDocument requests", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/auth/login")) {
-        return new Response(
-          JSON.stringify({
-            userId: "user_1",
-            accessToken: "token_user_1",
-          }),
-          { status: 200 }
-        );
-      }
-
+  it("sends Authorization on createDocument requests after a session is set", async () => {
+    const fetchMock = vi.fn(async () => {
       return new Response(
         JSON.stringify({
           documentId: "doc_123",
@@ -29,11 +18,12 @@ describe("api client", () => {
     });
 
     const client = createApiClient("http://localhost:3000", fetchMock as typeof fetch);
+    client.setSession({ accessToken: "token_user_1" });
 
-    await client.createDocument({ title: "Test Doc", content: "Hello" }, "user_1");
+    await client.createDocument({ title: "Test Doc", content: "Hello" });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [, options] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = options.headers as Headers;
     expect(headers.get("Authorization")).toBe("Bearer token_user_1");
   });
@@ -88,13 +78,9 @@ describe("api client", () => {
   it("parses export job responses and session issuance responses", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/auth/login")) {
-        return new Response(JSON.stringify({ userId: "user_export", accessToken: "token_export" }), { status: 200 });
-      }
-
       if (url.endsWith("/documents/doc_123/export")) {
         return new Response(JSON.stringify({ jobId: "expjob_123", statusUrl: "/exports/expjob_123" }), {
-          status: 202,
+          status: 200,
         });
       }
 
@@ -102,7 +88,8 @@ describe("api client", () => {
         return new Response(
           JSON.stringify({
             sessionId: "sess_123",
-            wsUrl: "ws://localhost:3001/ws?token=abc",
+            wsUrl: "ws://localhost:3001/ws",
+            sessionToken: "abc",
             role: "editor",
           }),
           { status: 200 }
@@ -113,14 +100,16 @@ describe("api client", () => {
     });
 
     const client = createApiClient("http://localhost:3000", fetchMock as typeof fetch);
+    client.setSession({ accessToken: "token_export" });
 
-    await expect(client.createExport("doc_123", { format: "pdf" }, "user_export")).resolves.toMatchObject({
+    await expect(client.createExport("doc_123", { format: "pdf" })).resolves.toMatchObject({
       jobId: "expjob_123",
       statusUrl: "/exports/expjob_123",
     });
 
-    await expect(client.createSession("doc_123", "user_export")).resolves.toMatchObject({
+    await expect(client.createSession("doc_123")).resolves.toMatchObject({
       sessionId: "sess_123",
+      sessionToken: "abc",
       role: "editor",
     });
   });

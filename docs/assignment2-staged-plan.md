@@ -1,5 +1,8 @@
 # Assignment 2 Maximum-Grade Execution Plan
 
+> Historical planning artifact from the earlier multi-person split.
+> The final implementation state is now tracked in `docs/assignment2-current-state.md` and `docs/assignment2-contracts.md`.
+
 This document turns the Assignment 2 brief into a staged implementation plan that four people can work on
 asynchronously while keeping GitHub contribution evidence clean and easy to evaluate.
 

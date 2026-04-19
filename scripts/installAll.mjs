@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { listInstallTargets, printSection, ROOT_DIR, SERVICE_DEFINITIONS, runNpmCommand } from "./utils.mjs";
+import { FASTAPI_DIR, listInstallTargets, printSection, pythonExecutable, ROOT_DIR, SERVICE_DEFINITIONS, runCommand, runNpmCommand } from "./utils.mjs";
 
 async function main() {
   printSection(`Installing workspace dependencies from ${ROOT_DIR}`);
@@ -21,6 +21,13 @@ async function main() {
       process.stdout.write(`[${service.name}] skipped (no package.json in ${relativePath})\n`);
     }
   }
+
+  await runCommand({
+    command: pythonExecutable(),
+    cwd: FASTAPI_DIR,
+    label: "backend-fastapi",
+    args: ["-m", "pip", "install", "-e", "."],
+  });
 
   printSection("install:all completed");
 }

@@ -22,7 +22,15 @@ vi.mock("../services/realtime", () => ({
 
 function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
+    setSession: vi.fn(),
     login: vi.fn(),
+    register: vi.fn(),
+    forgotPassword: vi.fn(),
+    resetPassword: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+    getCurrentUser: vi.fn(),
+    listDocuments: vi.fn(),
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -30,13 +38,27 @@ function createApiClientMock(overrides: Partial<ApiClient> = {}): ApiClient {
     listPermissions: vi.fn(),
     updatePermission: vi.fn(),
     revokePermission: vi.fn(),
+    listShareLinks: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
+    previewShareLink: vi.fn(),
+    acceptShareLink: vi.fn(),
     getAiPolicy: vi.fn(),
+    getAiUsage: vi.fn(async () => ({
+      documentId: "doc_123",
+      aiEnabled: true,
+      dailyQuota: 5,
+      usedToday: 0,
+      remainingToday: 5,
+      allowedRolesForAI: ["owner", "editor"],
+      currentUserRole: "owner",
+      canUseAi: true,
+    })),
     updateAiPolicy: vi.fn(),
     revertToVersion: vi.fn(),
-    requestRewriteJob: vi.fn(),
-    requestSummarizeJob: vi.fn(),
-    requestTranslateJob: vi.fn(),
-    getAiJobStatus: vi.fn(),
+    startAiStream: vi.fn(),
+    listAiHistory: vi.fn(),
+    cancelAiJob: vi.fn(),
     recordAiJobFeedback: vi.fn(),
     createExport: vi.fn(),
     getExportJobStatus: vi.fn(),
@@ -81,7 +103,8 @@ function renderDocumentPage(apiClient: ApiClient, dashboardService = createDashb
 }
 
 function getPageEditor(pageNumber = 1) {
-  return screen.getByLabelText(`Document content page ${pageNumber}`);
+  void pageNumber;
+  return screen.getByLabelText(/Document content/i);
 }
 
 function clickFileMenuSave() {

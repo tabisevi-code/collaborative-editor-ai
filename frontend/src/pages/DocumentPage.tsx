@@ -7,17 +7,17 @@ import { AiPolicyPanel } from "../components/AiPolicyPanel";
 import { DocHeader } from "../components/DocHeader";
 import { ExportPanel } from "../components/ExportPanel";
 import { MetadataCard } from "../components/MetadataCard";
-import { PagedPlainTextEditor, type PagedPlainTextEditorHandle } from "../components/PagedPlainTextEditor";
+import { RichEditor, type RichEditorHandle } from "../components/RichEditor";
 import { PermissionsPanel } from "../components/PermissionsPanel";
 import { StatusBanner } from "../components/StatusBanner";
 import { VersionHistoryPanel } from "../components/VersionHistoryPanel";
-import type { DocumentEditorAdapter } from "../lib/documentEditor";
-import { applyToolbarAction, type ToolbarAction, type ToolbarSelection } from "../lib/richTextToolbar";
+import type { ToolbarAction } from "../lib/richTextToolbar";
 import {
   isViewerRole,
   mapDocumentError,
   mapSaveError,
   type SaveState,
+  toPlainText,
   toRealtimeStatusLabel,
   wordCount,
 } from "./documentPageUtils";
@@ -63,12 +63,9 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
 
-  const editorRef = useRef<PagedPlainTextEditorHandle>(null);
+  const editorRef = useRef<RichEditorHandle>(null);
   const requestIdRef = useRef(0);
-  const historyRef = useRef<string[]>([""]);
-  const historyIndexRef = useRef(0);
-  const aiService = createAiService(apiClient, userId);
-  const editorAdapterRef = useRef<DocumentEditorAdapter | null>(null);
+  const aiService = createAiService(apiClient);
   const realtimeDocument = useRealtimeDocument({
     apiClient,
     document,
@@ -94,57 +91,7 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
   const collaboratorCount = realtimeDocument.remotePeers.length;
   const realtimeStatus = toRealtimeStatusLabel(realtimeDocument.realtimeState, collaboratorCount);
 
-  editorAdapterRef.current = {
-    focus() {
-      editorRef.current?.focus();
-    },
-    getContent() {
-      return visibleContent;
-    },
-    setContent(nextValue) {
-      applyVisibleContent(nextValue, "editor-adapter:set-content", { recordHistory: true });
-    },
-    getSelection() {
-      return editorRef.current?.getSelection() ?? selection;
-    },
-    setSelection(nextSelection) {
-      syncSelection(nextSelection, visibleContent);
-    },
-    replaceSelection(targetSelection, replacement) {
-      return (
-        visibleContent.slice(0, targetSelection.start) +
-        replacement +
-        visibleContent.slice(targetSelection.end)
-      );
-    },
-  };
-
-  function resetEditorHistory(nextValue: string) {
-    historyRef.current = [nextValue];
-    historyIndexRef.current = 0;
-  }
-
-  function pushEditorHistory(nextValue: string) {
-    const currentValue = historyRef.current[historyIndexRef.current];
-    if (currentValue === nextValue) {
-      return;
-    }
-
-    const nextHistory = historyRef.current.slice(0, historyIndexRef.current + 1);
-    nextHistory.push(nextValue);
-    if (nextHistory.length > 100) {
-      nextHistory.shift();
-    }
-
-    historyRef.current = nextHistory;
-    historyIndexRef.current = nextHistory.length - 1;
-  }
-
-  function applyVisibleContent(nextValue: string, reason: string, options?: { recordHistory?: boolean }) {
-    if (options?.recordHistory) {
-      pushEditorHistory(nextValue);
-    }
-
+  function applyVisibleContent(nextValue: string, reason: string) {
     console.debug("[document-page] content_updated", {
       reason,
       collaborationReady: realtimeDocument.collaborationReady,
@@ -162,9 +109,10 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
     setFallbackContent(nextValue);
   }
 
-  function syncSelection(nextSelection: ToolbarSelection, content: string) {
+  function syncSelection(nextSelection: TextSelection, content: string) {
     setSelection(nextSelection);
-    setSelectedText(nextSelection.start === nextSelection.end ? "" : content.slice(nextSelection.start, nextSelection.end));
+    const plainText = toPlainText(content);
+    setSelectedText(nextSelection.start === nextSelection.end ? "" : plainText.slice(nextSelection.start, nextSelection.end));
 
     window.requestAnimationFrame(() => {
       const editor = editorRef.current;
@@ -196,7 +144,6 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
       setDocument(fetched);
       setDraftTitle(fetched.title);
       setFallbackContent(fetched.content);
-      resetEditorHistory(fetched.content);
       await dashboardService.rememberDocument(userId, fetched);
 
       if (reloadCollaboration) {
@@ -249,14 +196,9 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
   }, [realtimeDocument.collaborationReady, realtimeDocument.collaborationText, fallbackContent, document, saveState]);
 
   useEffect(() => {
-    const activeText = realtimeDocument.collaborationReady ? realtimeDocument.collaborationText : fallbackContent;
+    const activeText = toPlainText(realtimeDocument.collaborationReady ? realtimeDocument.collaborationText : fallbackContent);
     const { start, end } = selection;
-    if (end > start) {
-      setSelectedText(activeText.slice(start, end));
-      return;
-    }
-
-    setSelectedText("");
+    setSelectedText(end > start ? activeText.slice(start, end) : "");
   }, [realtimeDocument.collaborationReady, realtimeDocument.collaborationText, fallbackContent, selection]);
 
   useEffect(() => {
@@ -375,19 +317,21 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
   }
 
   function captureSelection() {
-    const editor = editorAdapterRef.current;
+    const editor = editorRef.current;
     if (!editor) {
       return;
     }
 
+    const nextSelectedText = editor.captureSelection();
     const nextSelection = editor.getSelection();
     setSelection(nextSelection);
+    setSelectedText(nextSelectedText);
     realtimeDocument.setCursorSelection(nextSelection.start === nextSelection.end ? null : nextSelection);
   }
 
   function handleEditorChange(nextText: string) {
     setSyncNoticeMessage(null);
-    applyVisibleContent(nextText, "typing", { recordHistory: true });
+    applyVisibleContent(nextText, "typing");
   }
 
   async function handleAiApply(payload: AiApplyPayload) {
@@ -395,20 +339,21 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
       return;
     }
 
-    const targetSelection = payload.targetSelection;
-    let nextContent = visibleContent;
-
-    if (realtimeDocument.collaborationReady) {
-      const didApply = realtimeDocument.replaceSelection(targetSelection, payload.text);
-      if (!didApply) {
-        return;
-      }
-
-      nextContent = realtimeDocument.getText();
-    } else {
-      nextContent = editorAdapterRef.current?.replaceSelection(targetSelection, payload.text) || visibleContent;
-      applyVisibleContent(nextContent, "ai-apply", { recordHistory: true });
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
     }
+
+    const targetSelection = payload.targetSelection;
+    const activePlainText = toPlainText(realtimeDocument.getText() || visibleContent);
+    const currentRangeText = activePlainText.slice(targetSelection.start, targetSelection.end);
+    if (currentRangeText !== payload.sourceText) {
+      throw new Error("The selected text changed before the AI result was applied. Re-run AI on the latest text.");
+    }
+
+    editor.replaceSelection(payload.text, targetSelection);
+    const nextContent = editor.getHTML();
+    applyVisibleContent(nextContent, "ai-apply");
 
     const nextCursor = targetSelection.start + payload.text.length;
     syncSelection({ start: nextCursor, end: nextCursor }, nextContent);
@@ -446,7 +391,7 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
     }
 
     const { start, end } = selection;
-    const activeText = realtimeDocument.getText() || visibleContent;
+    const activeText = toPlainText(realtimeDocument.getText() || visibleContent);
     if (end <= start) {
       return null;
     }
@@ -460,28 +405,44 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
     };
   }
 
+  function handleUseWholeDocument() {
+    const activeText = toPlainText(realtimeDocument.getText() || visibleContent);
+    if (!activeText.length) {
+      return;
+    }
+
+    const wholeSelection = { start: 0, end: activeText.length };
+    syncSelection(wholeSelection, visibleContent);
+    realtimeDocument.setCursorSelection(wholeSelection);
+  }
+
   function handleToolbarAction(action: ToolbarAction) {
     if (realtimeDocument.role === "viewer" || realtimeDocument.accessRevoked) {
       return;
     }
 
-    if (action === "undo" || action === "redo") {
-      const nextIndex = historyIndexRef.current + (action === "undo" ? -1 : 1);
-      const nextValue = historyRef.current[nextIndex];
-      if (nextValue === undefined) {
-        return;
-      }
-
-      historyIndexRef.current = nextIndex;
-      applyVisibleContent(nextValue, `toolbar:${action}`);
-      syncSelection({ start: nextValue.length, end: nextValue.length }, nextValue);
+    const editor = editorRef.current;
+    if (!editor) {
       return;
     }
 
-    const currentSelection = editorAdapterRef.current?.getSelection() ?? selection;
-    const result = applyToolbarAction(visibleContent, currentSelection, action);
-    applyVisibleContent(result.value, `toolbar:${action}`, { recordHistory: true });
-    syncSelection(result.selection, result.value);
+    const commandMap: Record<ToolbarAction, [string, string?]> = {
+      bold: ["bold"],
+      italic: ["italic"],
+      underline: ["underline"],
+      strike: ["strikeThrough"],
+      bulletList: ["insertUnorderedList"],
+      numberedList: ["insertOrderedList"],
+      paragraph: ["formatBlock", "<p>"],
+      heading1: ["formatBlock", "<h1>"],
+      heading2: ["formatBlock", "<h2>"],
+      heading3: ["formatBlock", "<h3>"],
+      codeBlock: ["formatBlock", "<pre>"],
+      undo: ["undo"],
+      redo: ["redo"],
+    };
+    const [command, value] = commandMap[action];
+    editor.format(command, value);
   }
 
   return (
@@ -587,18 +548,21 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
               </div>
             )}
 
-            <PagedPlainTextEditor
+            <RichEditor
               ref={editorRef}
               value={visibleContent}
+              remotePeers={realtimeDocument.remotePeers}
               onChange={handleEditorChange}
-              onSelectionChange={(nextSelection) => {
+              onSelectionChange={(nextSelection, nextSelectedText) => {
                 setSelection(nextSelection);
+                setSelectedText(nextSelectedText);
                 realtimeDocument.setCursorSelection(
                   nextSelection.start === nextSelection.end ? null : nextSelection
                 );
               }}
               readOnly={isReadOnly}
               autoFocus={!isReadOnly}
+              className="gdoc-page rich-editor-page"
             />
 
             {showMeta && (
@@ -619,7 +583,7 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
             <span>·</span>
             <span>{wordCount(visibleContent).toLocaleString()} words</span>
             <span>·</span>
-            <span>{visibleContent.length.toLocaleString()} characters</span>
+            <span>{toPlainText(visibleContent).length.toLocaleString()} characters</span>
             <span>·</span>
             <span>{collaboratorCount > 0 ? `${collaboratorCount + 1} people connected` : "Only you connected"}</span>
             {document.updatedAt && (
@@ -654,6 +618,7 @@ export function DocumentPage({ apiClient, dashboardService, userId, displayName,
           }
           selectedText={selectedText}
           aiService={aiService}
+          onUseWholeDocument={handleUseWholeDocument}
           onApply={handleAiApply}
           onReject={(jobId) => recordAiFeedback(jobId, "rejected")}
           onClose={() => setShowAiPanel(false)}

@@ -23,7 +23,7 @@ interface AuthContextValue {
   authStatus: AuthStatus;
   login(input: LoginInput): Promise<void>;
   register(input: RegisterInput): Promise<void>;
-  logout(): void;
+  logout(): Promise<void>;
   handleExpiredSession(): void;
 }
 
@@ -33,7 +33,13 @@ const REFRESH_THRESHOLD_MS = 60 * 1000;
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function hasWindowSessionStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  return (
+    typeof window !== "undefined" &&
+    typeof window.localStorage !== "undefined" &&
+    typeof window.localStorage.getItem === "function" &&
+    typeof window.localStorage.setItem === "function" &&
+    typeof window.localStorage.removeItem === "function"
+  );
 }
 
 function readStoredSession(): AuthSessionPayload | null {
@@ -48,10 +54,7 @@ function readStoredSession(): AuthSessionPayload | null {
     }
 
     return JSON.parse(raw) as AuthSessionPayload;
-  } catch (error) {
-    console.warn("[auth-context] failed_to_read_session", {
-      message: error instanceof Error ? error.message : String(error),
-    });
+  } catch {
     return null;
   }
 }
@@ -96,15 +99,13 @@ export function AuthProvider({
     async function restoreSession() {
       const storedSession = readStoredSession();
       if (!storedSession) {
+        adapterRef.current.setSession(null);
         setAuthStatus("anonymous");
         return;
       }
 
       if (isExpired(storedSession) || shouldRefreshSoon(storedSession)) {
         try {
-          console.info("[auth-context] restoring_session_with_refresh", {
-            userId: storedSession.user.id,
-          });
           setAuthStatus("refreshing");
           const refreshedSession = await adapterRef.current.refresh(storedSession);
           if (cancelled) {
@@ -113,10 +114,8 @@ export function AuthProvider({
           setSession(refreshedSession);
           setAuthStatus("authenticated");
           return;
-        } catch (error) {
-          console.warn("[auth-context] restore_refresh_failed", {
-            message: error instanceof Error ? error.message : String(error),
-          });
+        } catch {
+          adapterRef.current.setSession(null);
           writeStoredSession(null);
           if (!cancelled) {
             setSession(null);
@@ -126,9 +125,7 @@ export function AuthProvider({
         }
       }
 
-      console.info("[auth-context] restored_session", {
-        userId: storedSession.user.id,
-      });
+      adapterRef.current.setSession(storedSession);
       setSession(storedSession);
       setAuthStatus("authenticated");
     }
@@ -142,6 +139,39 @@ export function AuthProvider({
 
   useEffect(() => {
     writeStoredSession(session);
+    adapterRef.current.setSession(session);
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    const refreshAt = new Date(session.expiresAt).getTime() - REFRESH_THRESHOLD_MS - Date.now();
+    const timeoutMs = Math.max(refreshAt, 0);
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setAuthStatus("refreshing");
+        const refreshedSession = await adapterRef.current.refresh(session);
+        if (cancelled) {
+          return;
+        }
+        setSession(refreshedSession);
+        setAuthStatus("authenticated");
+      } catch {
+        if (!cancelled) {
+          adapterRef.current.setSession(null);
+          setSession(null);
+          setAuthStatus("anonymous");
+        }
+      }
+    }, timeoutMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [session]);
 
   const value = useMemo<AuthContextValue>(
@@ -153,9 +183,6 @@ export function AuthProvider({
         setAuthStatus("refreshing");
         try {
           const nextSession = await adapterRef.current.login(input);
-          console.info("[auth-context] login_success", {
-            userId: nextSession.user.id,
-          });
           setSession(nextSession);
           setAuthStatus("authenticated");
         } catch (error) {
@@ -168,9 +195,6 @@ export function AuthProvider({
         setAuthStatus("refreshing");
         try {
           const nextSession = await adapterRef.current.register(input);
-          console.info("[auth-context] register_success", {
-            userId: nextSession.user.id,
-          });
           setSession(nextSession);
           setAuthStatus("authenticated");
         } catch (error) {
@@ -179,14 +203,18 @@ export function AuthProvider({
         }
       },
 
-      logout() {
-        console.info("[auth-context] logout");
-        setSession(null);
-        setAuthStatus("anonymous");
+      async logout() {
+        const currentSession = session;
+        try {
+          await adapterRef.current.logout(currentSession);
+        } finally {
+          setSession(null);
+          setAuthStatus("anonymous");
+        }
       },
 
       handleExpiredSession() {
-        console.warn("[auth-context] session_expired");
+        adapterRef.current.setSession(null);
         setSession(null);
         setAuthStatus("anonymous");
       },

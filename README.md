@@ -1,172 +1,121 @@
 # Collaborative Editor AI
 
-Collaborative Editor AI is a monorepo implementation of a collaborative document editor with AI-assisted writing workflows.
+Collaborative Editor AI is the final Assignment 2 monorepo for a collaborative document editor with JWT auth, realtime collaboration, a backend-streamed AI assistant, AI history, version restore, permissions, and exports.
 
-The MVP includes:
+## Final Stack
 
-- REST document APIs with authentication, RBAC, version history, revert, export, and AI jobs
-- A React frontend connected to those APIs
-- A dedicated realtime service relaying Yjs synchronization and awareness over WebSockets
-- SQLite persistence shared between backend and realtime services
+- `backend_fastapi/` — FastAPI backend with JWT auth, documents, AI, exports, and `/docs`
+- `frontend/` — React + TypeScript client
+- `realtime/` — Yjs/WebSocket relay with signed session-token auth
+- `shared/` — shared realtime session-token signing helpers
 
----
+Bonus-tier features included in the runnable stack:
+
+- share-by-link with configurable role and revocation
+- optional revocation of access that was granted through a share link
+- inline remote cursor and selection rendering
+- browser E2E coverage with Playwright
+- real PDF export bytes
+- real DOCX export bytes
+- per-user AI quota visibility and idempotent write routes
+
+The legacy `backend/` directory remains only as migration/reference code for the realtime service bootstrap and prior coursework history. The Assignment 2 runnable path is FastAPI-first.
 
 ## Requirements
 
-- Node.js >= 20  
-- npm >= 10  
-- Docker (optional, for containerized execution)
-
----
+- Python 3.11+
+- Node.js 20+
+- npm 10+
+- Docker optional
 
 ## Evaluator Quickstart
 
-Fastest way to validate the MVP:
-
+```bash
 npm run install:all
-npm run demo:reset
 npm run test:all
-
-Then open:
-
-Frontend: http://localhost:5173  
-Swagger / OpenAPI UI: http://localhost:3000/docs/
-
-Recommended quick feature check:
-
-1. Sign in as user_1
-2. Create a document
-3. Open the same document in a second tab as user_2
-4. Grant editor access from user_1
-5. Verify live editing in both tabs
-6. Observe autosave
-7. Run an AI action and apply the result
-8. Open version history and revert
-9. Export the document
-
-If ports 3000, 3001, or 5173 are already in use, run:
-
-npm run demo:reset
-
-This stops stale processes and resets the local SQLite database.
-
----
-
-## Monorepo Layout
-
-backend/ — Express API, authentication, RBAC, SQLite persistence, AI orchestration, exports, realtime session issuance  
-frontend/ — React + TypeScript client for documents, permissions, versions, AI, and live collaboration  
-realtime/ — WebSocket relay for Yjs sync, awareness, and permission enforcement  
-ai-service/ — AI provider adapter and prompt execution logic  
-shared/ — Shared contracts (e.g., realtime session signing)  
-docs/ — ADRs, architecture notes, diagrams  
-config/ — Configuration notes  
-final-report/ — Final submission documentation package  
-
----
-
-## Quickstart (Local Development)
-
-From the repository root:
-
-npm run install:all
 npm run dev:all
-npm run test:all
+```
 
-dev:all starts backend, realtime service, and frontend together.  
-test:all runs backend, frontend, realtime, and integration smoke tests.  
-demo:reset wipes the SQLite database and resets ports.
+Open:
 
-The backend reads backend/.env if present. Copy backend/.env.example to backend/.env for local overrides.
+- Frontend: `http://localhost:5173`
+- FastAPI docs: `http://localhost:8000/docs`
 
----
+## One-Command Paths
 
+- Install everything: `npm run install:all`
+- Run the full stack: `npm run dev:all`
+- Run all tests: `npm run test:all`
 
+Optional browser E2E runs:
 
-## Service Commands
+- `cd frontend && AI_STREAM_PROVIDER=stub npm run test:e2e`
+- `cd frontend && AI_STREAM_PROVIDER=lmstudio npm run test:e2e`
 
-### Backend
+Equivalent wrappers:
 
-cd backend  
-npm install  
-npm run dev  
-npm test  
+- `make`
+- `make install`
+- `make run`
+- `make test`
 
-### Frontend
+## Demo Flow
 
-cd frontend  
-npm install  
-npm run dev  
-npm test  
-
-### Realtime
-
-cd realtime  
-npm install  
-npm run dev  
-npm test  
-
----
-
-## Runtime Flow
-
-1. The frontend authenticates using POST /auth/login.
-2. The frontend performs document CRUD, permissions, versioning, AI jobs, exports, and session creation via the backend API.
-3. The backend persists documents, versions, permissions, AI jobs, and metadata in SQLite.
-4. The frontend requests a realtime session using POST /sessions.
-5. The frontend opens a WebSocket connection to the realtime service using the backend-issued session URL.
-6. The realtime service validates the signed session token, enforces role-based access, and relays Yjs synchronization and awareness updates.
-
-All REST endpoints and WebSocket session issuance are protected by backend-issued bearer tokens.
-
----
+1. Register a user or sign in with an existing account.
+2. Create a document from the dashboard.
+3. Open the same document in a second browser as another user.
+4. Grant editor access from the owner account.
+5. Verify live collaboration.
+6. Edit rich text and observe autosave.
+7. Run an AI rewrite, summarize, or translate action.
+8. Review AI history.
+9. Create and revoke a share link.
+10. Show inline remote cursor/selection rendering in a second browser.
+11. Revert using version history.
+12. Export the document as PDF.
 
 ## Testing
 
-Repo-wide:
+`npm run test:all` runs:
 
-npm run test:all
+- FastAPI backend tests
+- frontend Vitest suite
+- realtime Node test suite
+- root full-stack smoke test against FastAPI + realtime
 
-This runs:
+## Environment
 
-- Backend unit + smoke tests
-- Frontend Vitest suite
-- Realtime Node test suite
-- Root integration smoke test that validates cross-service behavior
+See:
 
-All tests must pass before submission.
+- root `.env.example`
+- `backend_fastapi/.env.example`
 
----
+Important:
 
-## Environment Configuration
+- keep JWT and realtime secrets out of the repository
+- `npm run dev:all` generates ephemeral local secrets if you do not provide them
+- `docker compose` expects you to provide `JWT_SECRET_KEY`, `JWT_REFRESH_SECRET_KEY`, and `REALTIME_SHARED_SECRET`
+- browser access from `http://localhost:5173` is allowed by FastAPI CORS via `FRONTEND_ALLOWED_ORIGINS`
+- realtime websocket auth uses a signed subprotocol token rather than a query-string token
+- auth/session throttling is backed by the shared SQLite database
 
-Important backend defaults:
+Default local ports:
 
-PORT=3000  
-DATABASE_PATH=./data/collaborative-editor-ai.sqlite  
-REALTIME_WS_BASE_URL=ws://localhost:3001/ws  
-REALTIME_SHARED_SECRET=collaborative-editor-ai-dev-secret  
-AI_PROVIDER=stub  
-AI_PROVIDER_ENDPOINT=http://127.0.0.1:1234/v1/chat/completions  
+- FastAPI: `8000`
+- Realtime: `3001`
+- Frontend: `5173`
 
-AI_PROVIDER=stub is the safe local default.
+## Docker
 
-Switch to AI_PROVIDER=lmstudio if you want to exercise a real OpenAI-compatible model endpoint.
+```bash
+docker compose up --build
+```
 
----
+This starts the FastAPI backend, realtime service, and frontend against a shared SQLite volume.
 
 ## Documentation
 
-Backend contract notes: backend/CONTRACT.md  
-Backend OpenAPI: backend/docs/openapi.yaml  
-Architecture notes and ADRs: docs/  
-Final report package: final-report/  
-
----
-
-## Current Limitations
-
-- Documents are stored as plain text, not structured rich-text markup.
-- Formatting is simplified for coursework scope.
-- AI depends on an external OpenAI-compatible endpoint.
-- Services are intentionally local-first and simplified for academic evaluation.
+- Assignment 2 contracts: `docs/assignment2-contracts.md`
+- Current state: `docs/assignment2-current-state.md`
+- Deviations: `DEVIATIONS.md`
+- Final report assets: `final-report/`

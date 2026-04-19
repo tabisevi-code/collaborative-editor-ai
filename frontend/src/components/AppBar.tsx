@@ -2,10 +2,12 @@
 interface AppBarProps {
   userId: string;
   displayName: string;
-  onSignOut(): void;
+  searchQuery: string;
+  onSearchQueryChange(value: string): void;
+  onSignOut(): void | Promise<void>;
 }
 
-export function AppBar({ userId, displayName, onSignOut }: AppBarProps) {
+export function AppBar({ userId, displayName, searchQuery, onSearchQueryChange, onSignOut }: AppBarProps) {
   const initial = userId.charAt(0).toUpperCase() || "U";
 
   return (
@@ -31,7 +33,13 @@ export function AppBar({ userId, displayName, onSignOut }: AppBarProps) {
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </span>
-        <input className="home-search-input" placeholder="Search" aria-label="Search documents" />
+        <input
+          className="home-search-input"
+          placeholder="Search"
+          aria-label="Search documents"
+          value={searchQuery}
+          onChange={(event) => onSearchQueryChange(event.target.value)}
+        />
       </div>
 
       {/* Right: user switcher + avatar */}

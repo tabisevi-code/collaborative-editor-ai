@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export const ROOT_DIR = path.resolve(SCRIPT_DIR, "..");
+export const FASTAPI_DIR = path.join(ROOT_DIR, "backend_fastapi");
+export const FASTAPI_DATABASE_PATH = path.join(FASTAPI_DIR, "data", "collaborative-editor-ai.sqlite");
+export const FASTAPI_DATABASE_URL = `sqlite:///${FASTAPI_DATABASE_PATH}`;
 
 export const SERVICE_DEFINITIONS = [
   { name: "backend", cwd: path.join(ROOT_DIR, "backend") },
@@ -17,6 +20,10 @@ export const SERVICE_DEFINITIONS = [
 
 export function npmExecutable() {
   return process.platform === "win32" ? "npm.cmd" : "npm";
+}
+
+export function pythonExecutable() {
+  return process.env.PYTHON || "python3";
 }
 
 export async function hasPackageJson(directory) {
@@ -59,7 +66,17 @@ function writePrefixedLines(stream, targetStream, prefix) {
 }
 
 export function spawnNpmCommand({ cwd, label, args, env = process.env }) {
-  const child = spawn(npmExecutable(), args, {
+  return spawnCommand({
+    command: npmExecutable(),
+    cwd,
+    label,
+    args,
+    env,
+  });
+}
+
+export function spawnCommand({ command, cwd, label, args, env = process.env }) {
+  const child = spawn(command, args, {
     cwd,
     env,
     stdio: ["inherit", "pipe", "pipe"],
@@ -76,8 +93,12 @@ export function spawnNpmCommand({ cwd, label, args, env = process.env }) {
 }
 
 export function runNpmCommand({ cwd, label, args, env = process.env }) {
+  return runCommand({ command: npmExecutable(), cwd, label, args, env });
+}
+
+export function runCommand({ command, cwd, label, args, env = process.env }) {
   return new Promise((resolve, reject) => {
-    const child = spawnNpmCommand({ cwd, label, args, env });
+    const child = spawnCommand({ command, cwd, label, args, env });
 
     child.on("error", (error) => {
       reject(error);

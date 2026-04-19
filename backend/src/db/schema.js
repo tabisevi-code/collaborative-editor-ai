@@ -1,11 +1,5 @@
 const { makeId, nowIso } = require("../lib/ids");
 
-const DEFAULT_USERS = [
-  { userId: "user_1", displayName: "User One", globalRole: "user", accessToken: "token_user_1" },
-  { userId: "user_2", displayName: "User Two", globalRole: "user", accessToken: "token_user_2" },
-  { userId: "admin_1", displayName: "Admin One", globalRole: "admin", accessToken: "token_admin_1" },
-];
-
 function initializeSchema(db) {
   db.exec(`
     PRAGMA foreign_keys = ON;
@@ -125,28 +119,6 @@ function initializeSchema(db) {
     );
   `);
 
-  const existingUsers = db.prepare("SELECT COUNT(*) AS count FROM users").get();
-  if (existingUsers.count > 0) {
-    return;
-  }
-
-  const insertUser = db.prepare(`
-    INSERT INTO users (user_id, display_name, global_role, access_token, created_at, updated_at)
-    VALUES (@userId, @displayName, @globalRole, @accessToken, @createdAt, @updatedAt)
-  `);
-
-  const seedUsers = db.transaction(() => {
-    for (const user of DEFAULT_USERS) {
-      const createdAt = nowIso();
-      insertUser.run({
-        ...user,
-        createdAt,
-        updatedAt: createdAt,
-      });
-    }
-  });
-
-  seedUsers();
 }
 
 function resetBusinessTables(db) {

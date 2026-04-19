@@ -10,7 +10,7 @@
   "scripts": {
     "install:all": "node scripts/installAll.mjs",
     "dev:all": "node scripts/devAll.mjs",
-    "demo:reset": "node scripts/demoReset.mjs",
+    "dev:clean": "node scripts/devClean.mjs",
     "test:integration": "node --test tests/*.test.mjs",
     "test:all": "node scripts/testAll.mjs",
     "test": "npm run test:all"

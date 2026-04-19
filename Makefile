@@ -1,16 +1,15 @@
-.PHONY: install run test demo fastapi-dev
+.DEFAULT_GOAL := run
+
+.PHONY: install run test fastapi-dev
 
 install:
 	npm run install:all
 
 run:
-	./run.sh current
+	bash ./run.sh current
 
 test:
-	./run.sh test
-
-demo:
-	./run.sh demo
+	bash ./run.sh test
 
 fastapi-dev:
-	cd backend_fastapi && uvicorn app.main:app --reload --port 8000
+	cd backend_fastapi && python3 -m uvicorn app.main:app --reload --port 8000
