@@ -54,16 +54,7 @@ function formatJobStatus(phase: AiPanelPhase): string {
   return "Ready to run";
 }
 
-export function AiPanel({
-  documentId,
-  snapshot,
-  selectedText,
-  aiService,
-  onUseWholeDocument,
-  onApply,
-  onReject,
-  onClose,
-}: AiPanelProps) {
+export function AiPanel({ documentId, snapshot, selectedText, aiService, onUseWholeDocument, onApply, onReject, onClose }: AiPanelProps) {
   const [action, setAction] = useState<AiAction>("rewrite");
   const [targetLanguage, setTargetLanguage] = useState("Chinese");
   const [instruction, setInstruction] = useState("Make this clearer and more concise.");
@@ -204,28 +195,18 @@ export function AiPanel({
     suggestionSelection && suggestionSelection.end > suggestionSelection.start && editableSuggestion.length > 0
   );
   const previewSelectionText = phase === "completed" && runSnapshot ? runSnapshot.selectedText : selectedText;
-  const selectionLength =
-    snapshot.selection.end > snapshot.selection.start
-      ? snapshot.selection.end - snapshot.selection.start
-      : 0;
+  const selectionLength = snapshot.selection.end > snapshot.selection.start ? snapshot.selection.end - snapshot.selection.start : 0;
 
-  const instructionLabel =
-    action === "translate"
-      ? "Translation notes"
-      : action === "summarize"
-        ? "Summary instruction"
-        : "Rewrite instruction";
-  const instructionPlaceholder =
-    action === "translate"
-      ? "Optional notes like formal tone, keep names unchanged, or use simple wording"
-      : action === "summarize"
-        ? "Optional notes like keep it to one sentence or use bullet points"
-        : "Describe how the text should be rewritten";
+  const instructionLabel = action === "translate" ? "Translation notes" : action === "summarize" ? "Summary instruction" : "Rewrite instruction";
+  const instructionPlaceholder = action === "translate"
+    ? "Optional notes like formal tone, keep names unchanged, or use simple wording"
+    : action === "summarize"
+      ? "Optional notes like keep it to one sentence or use bullet points"
+      : "Describe how the text should be rewritten";
 
   return (
     <>
-      <div className="side-panel-overlay" onClick={onClose} />
-      <aside className="side-panel" data-testid="ai-panel">
+      <aside className="side-panel side-panel-nonmodal" data-testid="ai-panel">
         <div className="side-panel-header">
           <h3>
             <span>✨</span>
@@ -238,9 +219,7 @@ export function AiPanel({
 
         <div className="side-panel-body">
           <div>
-            <p className="field-label" style={{ marginBottom: "0.5rem" }}>
-              Action
-            </p>
+            <p className="field-label" style={{ marginBottom: "0.5rem" }}>Action</p>
             <div className="ai-action-tabs">
               {ACTIONS.map((item) => (
                 <button
@@ -264,29 +243,23 @@ export function AiPanel({
 
           {action === "translate" && (
             <div className="field">
-              <label className="field-label" htmlFor="target-lang">
-                Target language
-              </label>
-              <select
-                id="target-lang"
-                data-testid="ai-target-language"
-                className="text-input"
+              <label className="field-label" htmlFor="target-lang">Target language</label>
+                <select
+                  id="target-lang"
+                  data-testid="ai-target-language"
+                  className="text-input"
                 value={targetLanguage}
                 onChange={(event) => setTargetLanguage(event.target.value)}
               >
                 {LANGUAGES.map((language) => (
-                  <option key={language} value={language}>
-                    {language}
-                  </option>
+                  <option key={language} value={language}>{language}</option>
                 ))}
               </select>
             </div>
           )}
 
           <div className="field">
-            <label className="field-label" htmlFor="ai-instruction">
-              {instructionLabel}
-            </label>
+            <label className="field-label" htmlFor="ai-instruction">{instructionLabel}</label>
             <textarea
               id="ai-instruction"
               className="text-input"
@@ -321,15 +294,17 @@ export function AiPanel({
             </p>
           </div>
 
-          <div className="field ai-job-status-card">
+            <div className="field ai-job-status-card">
             <p className="field-label">Job status</p>
             <div className="ai-job-status-row">
               <strong>{formatJobStatus(phase)}</strong>
               {jobId && <span className="field-hint">{jobId}</span>}
             </div>
-            {phase === "streaming" && (
-              <p className="field-hint">Rendering the backend stream token by token.</p>
-            )}
+          {phase === "streaming" && (
+                <p className="field-hint">
+                 Rendering the backend stream token by token.
+                </p>
+              )}
             {usage && (
               <p className="field-hint">
                 Daily quota: {usage.usedToday}/{usage.dailyQuota} used today · {usage.remainingToday} remaining
@@ -415,12 +390,7 @@ export function AiPanel({
         <div className="side-panel-footer">
           {phase === "completed" ? (
             <>
-              <button
-                className="btn btn-primary"
-                data-testid="ai-apply-all"
-                style={{ flex: 1 }}
-                onClick={() => void handleApply("full")}
-              >
+              <button className="btn btn-primary" data-testid="ai-apply-all" style={{ flex: 1 }} onClick={() => void handleApply("full")}>
                 Apply all
               </button>
               <button
@@ -446,13 +416,7 @@ export function AiPanel({
             </>
           ) : (
             <>
-              <button
-                className="btn btn-ai"
-                data-testid="ai-run"
-                style={{ flex: 1 }}
-                onClick={handleRun}
-                disabled={!canRun || (usage ? !usage.canUseAi : false)}
-              >
+              <button className="btn btn-ai" data-testid="ai-run" style={{ flex: 1 }} onClick={handleRun} disabled={!canRun || (usage ? !usage.canUseAi : false)}>
                 Run AI
               </button>
               <button className="btn btn-secondary" onClick={onClose}>

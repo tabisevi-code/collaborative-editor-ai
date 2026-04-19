@@ -8,7 +8,6 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REALTIME_DIR = path.resolve(SCRIPT_DIR, "..");
 const TEST_FILE = path.join(REALTIME_DIR, "src", "server.test.js");
 const TEST_TIMEOUT_MS = 30000;
-const SUCCESS_EXIT_GRACE_MS = 500;
 
 function countExpectedTests(source) {
   const matches = source.match(/\btest\(\s*["'`]/g);
@@ -43,35 +42,17 @@ async function main() {
     throw new Error("realtime test wrapper could not detect any tests in src/server.test.js");
   }
 
-  const child = spawn(process.execPath, ["--test", "src/server.test.js"], {
+  const child = spawn(process.execPath, ["--test", "--test-force-exit", "src/server.test.js"], {
     cwd: REALTIME_DIR,
     stdio: ["inherit", "pipe", "pipe"],
   });
 
   let completedTests = 0;
   let sawFailure = false;
-  let completionTimer = null;
-
-  function scheduleSuccessfulShutdown() {
-    if (completionTimer || completedTests < expectedTests || sawFailure) {
-      return;
-    }
-
-    completionTimer = setTimeout(() => {
-      if (child.exitCode === null) {
-        child.kill("SIGTERM");
-      }
-    }, SUCCESS_EXIT_GRACE_MS);
-
-    if (typeof completionTimer.unref === "function") {
-      completionTimer.unref();
-    }
-  }
 
   function handleLine(line) {
     if (/^ok\s+\d+\s+-/.test(line) || /^[✔✓]\s+/.test(line)) {
       completedTests += 1;
-      scheduleSuccessfulShutdown();
       return;
     }
 
@@ -94,9 +75,6 @@ async function main() {
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       clearTimeout(globalTimeout);
-      if (completionTimer) {
-        clearTimeout(completionTimer);
-      }
 
       resolve({ code, signal });
     });

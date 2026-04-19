@@ -1,5 +1,8 @@
 # Final Report Workspace
 
+> Historical Assignment 1 report package kept for traceability only.
+> The Assignment 2 report package is `assignment2-report/`.
+
 This directory contains the submission-ready report source for AI1220 Assignment 1.
 
 It is intentionally separate from the implementation docs so the report can evolve without

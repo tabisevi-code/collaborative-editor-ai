@@ -30,14 +30,14 @@ The repository is now in an Assignment 2 runnable state.
 ## Remaining Risk Areas
 
 - realtime still depends on the legacy Node schema/bootstrap module internally
-- AI provider-native token streaming is optional; backend chunk streaming is the guaranteed baseline
+- AI provider-native token streaming depends on the currently loaded local LM Studio model when not using the deterministic stub provider
 
 ## Recent Hardening Notes
 
 - WebSocket auth now uses a signed subprotocol token instead of a query-string token.
 - Refresh-token rotation invalidates older access-token sessions immediately.
 - Auth/session throttling is backed by the shared SQLite database rather than process-local memory.
-- AI apply now refuses to overwrite a range if another collaborator already changed that source text.
+- AI apply refuses to overwrite a range if another collaborator already changed that source text.
 
 ## Submission Story
 

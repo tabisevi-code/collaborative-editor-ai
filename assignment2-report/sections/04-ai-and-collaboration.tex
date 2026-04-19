@@ -1,0 +1,29 @@
+\chapter{AI And Collaboration Strategy}
+
+\section{AI Feature Set}
+
+The system implements three AI features: rewrite, summarize, and translate. These satisfy the brief's
+requirement for at least two AI capabilities. The backend exposes streamed responses so the frontend can
+render output progressively. Users can cancel an in-progress generation and can either apply, partially
+apply, edit, or reject the final suggestion.
+
+Prompt construction is separated into backend prompt modules and provider abstractions rather than being
+hardcoded directly into frontend components. This keeps provider-specific logic in one place and makes it
+possible to swap between a deterministic stub provider and a local LM Studio/OpenAI-compatible provider.
+
+\section{AI Under Concurrent Editing}
+
+The main AI/collaboration risk is stale application of suggestions after the source text has already been
+changed by another collaborator. The final implementation addresses this explicitly.
+
+When AI is invoked, the system records the source selection snapshot and the exact selected text. When the
+user later tries to apply the result, the frontend verifies that the current text inside the target range
+still matches that original source. If it does not, the apply is blocked and the user is asked to rerun AI
+against the latest text. This prevents silent overwrites and keeps collaboration behaviour consistent under
+concurrent editing.
+
+\section{History, Policy, And Quota}
+
+Every AI interaction is logged with document association, action type, prompt label, output preview, and
+status. The UI exposes this history per document. AI policy and quota usage are also visible: owners can
+enable/disable AI for a document, control which roles may invoke AI, and see quota-related usage metrics.

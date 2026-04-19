@@ -1,4 +1,7 @@
 
+> Historical architecture decision record from earlier design stages.
+> The final Assignment 2 AI implementation supports a deterministic stub provider and a local LM Studio/OpenAI-compatible provider in `backend_fastapi/app/ai/`.
+
 ADR 004 — AI Model Strategy - Nurtore
 Title:
 AI Model Strategy for Writing Assistant
@@ -34,4 +37,3 @@ Alternatives considered:
 3. 	Full-document context by default for all AI requests
 ·   	Rejected because it increases cost, latency, and privacy risk.
 ·   	Selected-text scope is more efficient and safer for most user actions.
-

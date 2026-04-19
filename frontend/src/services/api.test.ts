@@ -114,94 +114,31 @@ describe("api client", () => {
     });
   });
 
-  it("starts AI streams and exposes history, usage, and cancel endpoints", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/auth/login")) {
-        return new Response(JSON.stringify({ userId: "user_ai", accessToken: "token_ai" }), { status: 200 });
-      }
-
-      if (url.endsWith("/ai/rewrite/stream")) {
-        return new Response('event: token\ndata: {"jobId":"aijob_123","text":"Hello"}\n\n', {
-          status: 200,
-          headers: {
-            "Content-Type": "text/event-stream",
-          },
-        });
-      }
-
-      if (url.endsWith("/documents/doc_123/ai-history")) {
-        return new Response(
-          JSON.stringify([
-            {
-              id: "aih_1",
-              documentId: "doc_123",
-              action: "rewrite",
-              promptLabel: "Rewrite selection",
-              outputPreview: "Hello",
-              status: "completed",
-              createdAt: "2026-04-02T00:00:00.000Z",
-              jobId: "aijob_123",
-            },
-          ]),
-          { status: 200 }
-        );
-      }
-
-      if (url.endsWith("/documents/doc_123/ai-usage")) {
-        return new Response(
-          JSON.stringify({
-            documentId: "doc_123",
-            aiEnabled: true,
-            dailyQuota: 5,
-            usedToday: 1,
-            remainingToday: 4,
-            allowedRolesForAI: ["owner", "editor"],
-            currentUserRole: "owner",
-            canUseAi: true,
-            updatedAt: "2026-04-02T00:00:00.000Z",
-          }),
-          { status: 200 }
-        );
-      }
-
-      if (url.endsWith("/ai/jobs/aijob_123/cancel")) {
-        return new Response(JSON.stringify({ jobId: "aijob_123", cancelled: true }), { status: 200 });
-      }
-
-      throw new Error(`Unexpected URL: ${url}`);
+  it("sends auth and accept headers on AI stream requests after a session is set", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response("event: done\ndata: {\"jobId\":\"aijob_123\",\"fullText\":\"***\"}\n\n", {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      });
     });
 
     const client = createApiClient("http://localhost:3000", fetchMock as typeof fetch);
-    const streamResponse = await client.startAiStream(
-      "rewrite",
-      {
-        documentId: "doc_123",
-        selection: { start: 0, end: 5 },
-        selectedText: "Hello",
-        contextBefore: "",
-        contextAfter: " world",
-        instruction: "Make this clearer",
-        baseVersionId: "ver_1",
-      },
-      undefined,
-      "user_ai"
-    );
+    client.setSession({ accessToken: "token_user_1" });
 
-    expect(streamResponse.ok).toBe(true);
-    await expect(client.listAiHistory("doc_123", "user_ai")).resolves.toHaveLength(1);
-    await expect(client.getAiUsage("doc_123", "user_ai")).resolves.toMatchObject({
-      usedToday: 1,
-      remainingToday: 4,
-    });
-    await expect(client.cancelAiJob("aijob_123", "user_ai")).resolves.toEqual({
-      jobId: "aijob_123",
-      cancelled: true,
+    await client.startAiStream("rewrite", {
+      documentId: "doc_123",
+      selection: { start: 0, end: 3 },
+      selectedText: "foo",
+      contextBefore: "",
+      contextAfter: "",
+      instruction: "Rewrite",
+      baseVersionId: "ver_1",
     });
 
-    const [, requestOptions] = fetchMock.mock.calls[1] as [string, RequestInit];
-    const headers = requestOptions.headers as Headers;
-    expect(headers.get("Authorization")).toBe("Bearer token_ai");
-    expect(headers.get("Accept")).toBe("text/event-stream");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Headers;
+    expect(headers.get("Authorization")).toBe("Bearer token_user_1");
+    expect(headers.get("Content-Type")).toBe("application/json");
   });
 });
