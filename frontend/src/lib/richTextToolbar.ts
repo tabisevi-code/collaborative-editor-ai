@@ -13,8 +13,15 @@ export type ToolbarAction =
   | InlineFormat
   | "bulletList"
   | "numberedList"
+  | "paragraph"
+  | "heading1"
+  | "heading2"
+  | "heading3"
+  | "codeBlock"
   | "undo"
   | "redo";
+
+type PlainTextToolbarAction = InlineFormat | "bulletList" | "numberedList";
 
 const INLINE_MARKERS: Record<InlineFormat, { prefix: string; suffix: string }> = {
   bold: { prefix: "**", suffix: "**" },
@@ -31,7 +38,7 @@ const INLINE_MARKERS: Record<InlineFormat, { prefix: string; suffix: string }> =
 export function applyToolbarAction(
   value: string,
   selection: ToolbarSelection,
-  action: Exclude<ToolbarAction, "undo" | "redo">
+  action: PlainTextToolbarAction
 ): ToolbarEditResult {
   if (action === "bulletList") {
     return toggleLinePrefix(value, selection, "- ");

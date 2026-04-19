@@ -11,10 +11,13 @@ coverage/
 # Env
 .env
 .env.*
+!.env.example
+!backend_fastapi/.env.example
 backend/.env
 backend/.env.*
 frontend/.env
 frontend/.env.*
+frontend/.vitest-localstorage
 ai-service/.env
 ai-service/.env.*
 .envrc
