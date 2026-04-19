@@ -100,6 +100,24 @@ function initializeSchema(db) {
       FOREIGN KEY (user_id) REFERENCES users(user_id)
     );
 
+    CREATE TABLE IF NOT EXISTS ai_history (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL UNIQUE,
+      document_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      prompt_label TEXT NOT NULL,
+      request_json TEXT NOT NULL,
+      output_text TEXT,
+      status TEXT NOT NULL CHECK (status IN ('streaming', 'completed', 'accepted', 'edited', 'rejected', 'cancelled', 'failed')),
+      error_code TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (document_id) REFERENCES documents(document_id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS export_jobs (
       job_id TEXT PRIMARY KEY,
       document_id TEXT NOT NULL,
@@ -153,6 +171,7 @@ function resetBusinessTables(db) {
   db.exec(`
     DELETE FROM realtime_events;
     DELETE FROM export_jobs;
+    DELETE FROM ai_history;
     DELETE FROM ai_jobs;
     DELETE FROM ai_policies;
     DELETE FROM audit_logs;
