@@ -47,7 +47,6 @@ function createAiServiceMock(): AiService {
       allowedRolesForAI: ["owner", "editor"],
       currentUserRole: "owner",
       canUseAi: true,
-      updatedAt: "2026-04-02T00:00:00.000Z",
     })),
     recordFeedback: vi.fn(async () => ({
       jobId: "aijob_123",
@@ -169,7 +168,8 @@ describe("AiPanel", () => {
       />
     );
 
-    await screen.findByText("Older suggestion");
+    expect(await screen.findByText(/1\/5 used today/i)).toBeInTheDocument();
+
     fireEvent.click(screen.getByTestId("ai-action-translate"));
 
     expect(screen.getByTestId("ai-target-language")).toBeInTheDocument();

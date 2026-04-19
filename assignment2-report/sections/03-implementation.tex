@@ -1,0 +1,33 @@
+\chapter{Implementation Summary}
+
+\section{Authentication And Sessions}
+
+Authentication is implemented with JWT access tokens and refresh tokens. Passwords are hashed using
+\texttt{pbkdf2\_sha256}. Refresh tokens are hashed before storage, and access tokens are tied to the
+active refresh-token session so that refresh invalidates older access-token sessions immediately. The
+frontend persists the session across page refreshes and refreshes tokens before expiry where necessary.
+
+The local forgot-password flow uses a one-time reset token shown directly inside the local environment
+instead of integrating an email provider. This preserves the reset lifecycle without adding external
+service complexity.
+
+\section{Documents, Roles, And Versioning}
+
+Documents are stored with owner metadata, content, revision identifiers, and version snapshots. Owners can
+share directly with other users as editors or viewers, and can also create revocable share-links. All role
+enforcement is server-side. The frontend does not merely hide unavailable buttons; the backend rejects
+unauthorised requests.
+
+Editing is autosaved and versioned. Revert is implemented as a first-class operation with version history
+preview and restoration. Save, share-link creation, and revert support idempotent request identifiers to
+avoid duplicate work under retries.
+
+\section{Realtime Collaboration}
+
+Realtime collaboration uses Yjs over a dedicated websocket relay. Clients request a signed collaboration
+session from FastAPI, then authenticate to the relay using a websocket subprotocol token. This avoids
+placing credentials in a query string while keeping the collaboration layer isolated from the REST API.
+
+The relay handles initial sync, ongoing updates, awareness/presence messages, reconnect behaviour, and
+server-side write rejection for viewers. The UI renders active collaborators and remote cursor/selection
+state, which also contributes to the bonus criteria.

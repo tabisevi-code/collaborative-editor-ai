@@ -1,5 +1,9 @@
 # Backend Contract Notes
 
+> Historical legacy contract notes for the earlier Node/Express backend.
+> These are not the authoritative Assignment 2 contracts.
+> For the final submission, use `docs/assignment2-contracts.md` and `backend_fastapi/`.
+
 This project no longer uses the original in-memory PoC contract only.
 
 The current backend contract centers around:

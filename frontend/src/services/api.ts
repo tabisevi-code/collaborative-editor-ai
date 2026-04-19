@@ -1,7 +1,6 @@
 import {
   ApiError,
   type AiHistoryItemResponse,
-  type AiJobResponse,
   type AiJobFeedbackRequest,
   type AiJobFeedbackResponse,
   type AiPolicyResponse,
@@ -71,10 +70,6 @@ export interface ApiClient {
   getAiPolicy(documentId: string, _userId?: string): Promise<AiPolicyResponse>;
   getAiUsage(documentId: string, _userId?: string): Promise<AiUsageResponse>;
   updateAiPolicy(documentId: string, payload: UpdateAiPolicyRequest, _userId?: string): Promise<AiPolicyResponse>;
-  requestRewriteJob(payload: RewriteAiStreamRequest & { requestId?: string }, _userId?: string): Promise<AiJobResponse>;
-  requestSummarizeJob(payload: SummarizeAiStreamRequest & { requestId?: string }, _userId?: string): Promise<AiJobResponse>;
-  requestTranslateJob(payload: TranslateAiStreamRequest & { requestId?: string }, _userId?: string): Promise<AiJobResponse>;
-  getAiJobStatus(jobId: string, _userId?: string): Promise<AiJobResponse>;
   revertToVersion(documentId: string, payload: { requestId: string; targetVersionId: string }, _userId?: string): Promise<RevertToVersionResponse>;
   startAiStream(action: "rewrite" | "summarize" | "translate", payload: AiStreamPayload, signal?: AbortSignal): Promise<Response>;
   listAiHistory(documentId: string, _userId?: string): Promise<AiHistoryItemResponse[]>;
@@ -193,32 +188,6 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
         fileName: parseContentDispositionFileName(response.headers.get("Content-Disposition")) || "download.bin",
         contentType: response.headers.get("Content-Type") || "application/octet-stream",
       };
-    } catch (error) {
-      throw toUnexpectedError(error);
-    }
-  }
-
-  async function requestResponse(path: string, init: RequestInit, userId?: string): Promise<Response> {
-    const headers = new Headers(init.headers);
-    headers.set("Content-Type", "application/json");
-
-    try {
-      if (userId?.trim()) {
-        const loginResponse = await login(userId);
-        headers.set("Authorization", `Bearer ${loginResponse.accessToken}`);
-      }
-
-      const response = await fetchImpl(`${resolvedBaseUrl}${path}`, {
-        ...init,
-        headers,
-      });
-
-      if (!response.ok) {
-        const payload = await parseJson(response);
-        throw toApiError(response.status, payload);
-      }
-
-      return response;
     } catch (error) {
       throw toUnexpectedError(error);
     }
@@ -359,22 +328,6 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchLike = fetch): 
         `/documents/${encodeURIComponent(documentId)}/ai-policy`,
         { method: "PUT", body: JSON.stringify(payload) }
       );
-    },
-
-    async requestRewriteJob() {
-      throw new ApiError(404, "NOT_IMPLEMENTED", "AI job endpoints are not enabled on this branch.");
-    },
-
-    async requestSummarizeJob() {
-      throw new ApiError(404, "NOT_IMPLEMENTED", "AI job endpoints are not enabled on this branch.");
-    },
-
-    async requestTranslateJob() {
-      throw new ApiError(404, "NOT_IMPLEMENTED", "AI job endpoints are not enabled on this branch.");
-    },
-
-    async getAiJobStatus() {
-      throw new ApiError(404, "NOT_IMPLEMENTED", "AI job endpoints are not enabled on this branch.");
     },
 
     revertToVersion(documentId, payload) {

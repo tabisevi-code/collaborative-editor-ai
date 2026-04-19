@@ -1,0 +1,30 @@
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+This Assignment 2 implementation delivers a working collaborative document editor with a React frontend,
+FastAPI backend, authenticated realtime collaboration, and a streaming AI writing assistant. The final
+system supports registration, login, refresh-token based session recovery, local password reset,
+document CRUD, role-based sharing, version history and restore, autosave, live collaboration, AI rewrite,
+summarize, and translate operations, AI history, share-by-link, and PDF/DOCX export.
+
+The implementation is intentionally organised as a monorepo with clear service boundaries. The FastAPI
+backend owns authentication, permissions, document lifecycle, AI orchestration, export workflows, and
+realtime session issuance. The React client provides the user-facing editing, sharing, AI review, and
+history flows. A dedicated Yjs/WebSocket relay handles low-latency collaborative state propagation. This
+division keeps the codebase understandable, testable, and aligned with the architecture described in
+Assignment 1 while still allowing pragmatic implementation changes.
+
+Several design decisions were driven by local reliability and reproducibility. Passwords are securely
+hashed, refresh tokens are hashed before persistence, and websocket authentication uses signed
+subprotocol tokens rather than query-string credentials. AI suggestions are streamed progressively,
+support cancellation, and remain subject to explicit user review before application. Under concurrent
+editing, stale AI suggestions are blocked from overwriting text that has already changed. These choices
+prioritise both security and collaboration correctness rather than a narrow feature checklist.
+
+The final repository also includes meaningful automated verification: backend tests, frontend component
+tests, realtime conflict-resolution tests, a root integration smoke test, and browser-level Playwright
+coverage. Alongside the implementation, the repository contains a README, a deviation report, API
+contracts, and setup scripts so that the system can be cloned, configured, and run locally without
+undocumented steps.
+
+\clearpage

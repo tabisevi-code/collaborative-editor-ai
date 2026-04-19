@@ -1,5 +1,8 @@
 # AI Integration Service
 
+> Historical legacy service artifact.
+> The Assignment 2 final runtime uses the AI implementation inside `backend_fastapi/app/ai/`.
+
 This folder contains the AI execution core for interacting with an external LLM provider.
 
 Responsibilities:

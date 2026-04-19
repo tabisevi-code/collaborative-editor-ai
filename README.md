@@ -1,10 +1,10 @@
 # Collaborative Editor AI
 
-Collaborative Editor AI is the final Assignment 2 monorepo for a collaborative document editor with JWT auth, realtime collaboration, a backend-streamed AI assistant, AI history, version restore, permissions, and exports.
+Collaborative Editor AI is the final Assignment 2 monorepo for a collaborative document editor with JWT auth, realtime collaboration, a backend-streamed AI writing assistant, version restore, permissions, and exports.
 
 ## Final Stack
 
-- `backend_fastapi/` — FastAPI backend with JWT auth, documents, AI, exports, and `/docs`
+- `backend_fastapi/` — FastAPI backend with JWT auth, documents, AI streaming/history/policy, share links, exports, and `/docs`
 - `frontend/` — React + TypeScript client
 - `realtime/` — Yjs/WebSocket relay with signed session-token auth
 - `shared/` — shared realtime session-token signing helpers
@@ -67,12 +67,13 @@ Equivalent wrappers:
 4. Grant editor access from the owner account.
 5. Verify live collaboration.
 6. Edit rich text and observe autosave.
-7. Run an AI rewrite, summarize, or translate action.
-8. Review AI history.
-9. Create and revoke a share link.
-10. Show inline remote cursor/selection rendering in a second browser.
-11. Revert using version history.
-12. Export the document as PDF.
+7. Run AI rewrite, summarize, and translate on selected text.
+8. Show streaming output, cancellation, and suggestion apply/reject flow.
+9. Show AI history and AI policy/quota controls.
+10. Create and revoke a share link.
+11. Show inline remote cursor/selection rendering in a second browser.
+12. Revert using version history.
+13. Export the document as PDF or DOCX.
 
 ## Testing
 
@@ -82,6 +83,11 @@ Equivalent wrappers:
 - frontend Vitest suite
 - realtime Node test suite
 - root full-stack smoke test against FastAPI + realtime
+
+Optional browser coverage:
+
+- `cd frontend && AI_STREAM_PROVIDER=stub npm run test:e2e`
+- `cd frontend && AI_STREAM_PROVIDER=lmstudio npm run test:e2e`
 
 ## Environment
 
@@ -118,4 +124,17 @@ This starts the FastAPI backend, realtime service, and frontend against a shared
 - Assignment 2 contracts: `docs/assignment2-contracts.md`
 - Current state: `docs/assignment2-current-state.md`
 - Deviations: `DEVIATIONS.md`
-- Final report assets: `final-report/`
+- Assignment 2 change log: `docs/assignment2-change-log.md`
+- Assignment 2 report package: `assignment2-report/`
+- Historical Assignment 1 report package: `final-report/`
+
+## Submission Checklist
+
+The final repository satisfies the Assignment 2 submission format as follows:
+
+- Source code: repository root, with `main` intended as the final submission branch
+- Documentation: `README.md`, `DEVIATIONS.md`, `docs/assignment2-contracts.md`, `docs/assignment2-current-state.md`
+- Architecture deviation report: `DEVIATIONS.md`
+- Single-command local start: `make` or `npm run dev:all`
+- Setup/env examples: `.env.example` and `backend_fastapi/.env.example`
+- API docs: FastAPI OpenAPI at `http://localhost:8000/docs`

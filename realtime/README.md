@@ -32,5 +32,5 @@ npm test
 Environment variables:
 
 - `REALTIME_PORT` default `3001`
-- `DATABASE_PATH` default `../backend/data/collaborative-editor-ai.sqlite`
+- `DATABASE_PATH` default `../backend_fastapi/data/collaborative-editor-ai.sqlite`
 - `REALTIME_SHARED_SECRET` must match the backend value
