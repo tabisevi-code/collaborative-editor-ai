@@ -21,14 +21,6 @@ async function* createTokenStream(tokens: string[]) {
 
 function createAiServiceMock(): AiService {
   return {
-    requestRewrite: vi.fn(async () => ({
-      jobId: "aijob_123",
-      statusUrl: "/ai/jobs/aijob_123",
-      status: "PENDING",
-    })),
-    requestSummarize: vi.fn(),
-    requestTranslate: vi.fn(),
-    pollJobUntilDone: vi.fn(),
     startStream: vi.fn(async () => ({
       jobId: "aijob_123",
       stream: createTokenStream(["Improved", " sentence"]),
@@ -46,6 +38,17 @@ function createAiServiceMock(): AiService {
         jobId: "job_older",
       },
     ]),
+    getUsage: vi.fn(async () => ({
+      documentId: "doc_123",
+      aiEnabled: true,
+      dailyQuota: 5,
+      usedToday: 1,
+      remainingToday: 4,
+      allowedRolesForAI: ["owner", "editor"],
+      currentUserRole: "owner",
+      canUseAi: true,
+      updatedAt: "2026-04-02T00:00:00.000Z",
+    })),
     recordFeedback: vi.fn(async () => ({
       jobId: "aijob_123",
       disposition: "rejected",
@@ -80,8 +83,10 @@ describe("AiPanel", () => {
     );
 
     expect(await screen.findByText("Older suggestion")).toBeInTheDocument();
+    expect(screen.getByText(/1\/5 used today/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/rewrite instruction/i)).toHaveValue("Make this clearer and more concise.");
 
-    fireEvent.click(screen.getByText(/run ai/i));
+    fireEvent.click(screen.getByTestId("ai-run"));
 
     await screen.findByText(/suggestion ready/i);
     expect(screen.getByDisplayValue("Improved sentence")).toBeInTheDocument();
@@ -94,6 +99,7 @@ describe("AiPanel", () => {
         mode: "full",
         jobId: "aijob_123",
         targetSelection: { start: 0, end: 5 },
+        sourceText: "Hello",
         edited: false,
       });
       expect(onClose).toHaveBeenCalled();
@@ -134,11 +140,130 @@ describe("AiPanel", () => {
       />
     );
 
-    fireEvent.click(screen.getByText(/run ai/i));
+    fireEvent.click(screen.getByTestId("ai-run"));
     await screen.findByRole("button", { name: /cancel stream/i });
     fireEvent.click(screen.getByRole("button", { name: /cancel stream/i }));
 
     expect(cancel).toHaveBeenCalledTimes(1);
     await screen.findByText(/generation cancelled/i);
+  });
+
+  it("shows translation-specific controls", async () => {
+    const aiService = createAiServiceMock();
+
+    render(
+      <AiPanel
+        documentId="doc_123"
+        snapshot={{
+          selection: { start: 0, end: 5 },
+          selectedText: "Hello",
+          contextBefore: "",
+          contextAfter: " world",
+          baseVersionId: "ver_1",
+        }}
+        selectedText="Hello"
+        aiService={aiService}
+        onApply={vi.fn()}
+        onReject={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await screen.findByText("Older suggestion");
+    fireEvent.click(screen.getByTestId("ai-action-translate"));
+
+    expect(screen.getByTestId("ai-target-language")).toBeInTheDocument();
+    expect(screen.getByLabelText(/translation notes/i)).toBeInTheDocument();
+  });
+
+  it("applies a completed suggestion back to the selection that generated it", async () => {
+    const aiService = createAiServiceMock();
+    const onApply = vi.fn();
+    const { rerender } = render(
+      <AiPanel
+        documentId="doc_123"
+        snapshot={{
+          selection: { start: 0, end: 5 },
+          selectedText: "Hello",
+          contextBefore: "",
+          contextAfter: " world",
+          baseVersionId: "ver_1",
+        }}
+        selectedText="Hello"
+        aiService={aiService}
+        onUseWholeDocument={vi.fn()}
+        onApply={onApply}
+        onReject={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId("ai-run"));
+    await screen.findByText(/suggestion ready/i);
+
+    rerender(
+      <AiPanel
+        documentId="doc_123"
+        snapshot={{
+          selection: { start: 6, end: 11 },
+          selectedText: "world",
+          contextBefore: "Hello ",
+          contextAfter: "",
+          baseVersionId: "ver_1",
+        }}
+        selectedText="world"
+        aiService={aiService}
+        onUseWholeDocument={vi.fn()}
+        onApply={onApply}
+        onReject={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId("ai-apply-all"));
+
+    await waitFor(() => {
+      expect(onApply).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Improved sentence",
+          targetSelection: { start: 0, end: 5 },
+          sourceText: "Hello",
+        })
+      );
+    });
+  });
+
+  it("surfaces a stale-source error instead of closing when apply fails", async () => {
+    const aiService = createAiServiceMock();
+    const onClose = vi.fn();
+
+    render(
+      <AiPanel
+        documentId="doc_123"
+        snapshot={{
+          selection: { start: 0, end: 5 },
+          selectedText: "Hello",
+          contextBefore: "",
+          contextAfter: " world",
+          baseVersionId: "ver_1",
+        }}
+        selectedText="Hello"
+        aiService={aiService}
+        onApply={vi.fn(async () => {
+          throw new Error("The selected text changed before the AI result was applied. Re-run AI on the latest text.");
+        })}
+        onReject={vi.fn()}
+        onClose={onClose}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId("ai-run"));
+    await screen.findByText(/suggestion ready/i);
+    fireEvent.click(screen.getByTestId("ai-apply-all"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/selected text changed before the ai result was applied/i)).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
   });
 });
