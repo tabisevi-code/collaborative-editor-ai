@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_DIR = path.resolve(SCRIPT_DIR, "..");
 const VITEST_ENTRY = path.join(FRONTEND_DIR, "node_modules", "vitest", "vitest.mjs");
-const LOCALSTORAGE_FILE = path.join(FRONTEND_DIR, ".vitest-localstorage");
 
 function buildTestEnv() {
   const existingNodeOptions = process.env.NODE_OPTIONS || "";
@@ -18,7 +17,6 @@ function buildTestEnv() {
 
   return {
     ...process.env,
-    NODE_NO_WARNINGS: "1",
     NODE_OPTIONS: cleanedNodeOptions,
   };
 }
@@ -50,7 +48,7 @@ function runGroup(files, index) {
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [`--localstorage-file=${LOCALSTORAGE_FILE}`, VITEST_ENTRY, "run", ...files],
+      [VITEST_ENTRY, "run", ...files],
       {
         stdio: "inherit",
         env: buildTestEnv(),
